@@ -54,7 +54,7 @@
 #include <pbs_ifl.h>
 #include <errno.h>
 #include <string.h>
-#include <list_link.h>
+#include <list_link.h>_n
 #include <log.h>
 #include <attribute.h>
 #include <resource.h>
@@ -6948,26 +6948,27 @@ pbsv1mod_meth_is_attrib_val_settable(PyObject *self, PyObject *args, PyObject *k
 
 	/* parse floats nicely since time.time() returns floats */
 
-		if ((py_value != Py_None) && (PyFloat_Check(py_value))) {
-			double	ftime;
-			ret = PyArg_Parse(py_value, "d", &ftime);
-			if (ret != 0)
-				exec_time = (long)ftime;
-		} else {
+		if (py_value != Py_None) {
+			if (PyFloat_Check(py_value)) {
+				double	ftime;
+				ret = PyArg_Parse(py_value, "d", &ftime);
+				if (ret != 0)
+					exec_time = (long)ftime;
+			}else {
 			ret = PyArg_Parse(py_value, "l", &exec_time);
-		}
+			}
 
 	/* if the parse worked but the time is in the past */
-	if (ret == 0) {
-	   snprintf(log_buffer, LOG_BUF_SIZE-1,
+		if (ret == 0) {
+	   	snprintf(log_buffer, LOG_BUF_SIZE-1,
        	     	   "exec_time could not be parsed");
-	   log_buffer[LOG_BUF_SIZE-1] = '\0';
-           PyErr_SetString(
-		pbs_python_types_table[PP_BADATTR_VALUE_ERR_IDX].t_class,
+	   	log_buffer[LOG_BUF_SIZE-1] = '\0';
+           	PyErr_SetString(
+			pbs_python_types_table[PP_BADATTR_VALUE_ERR_IDX].t_class,
 						log_buffer);
-	   rc = 1;
-	   goto IAVS_ERROR_EXIT;
-	} else if (exec_time < time(0)) {
+	   	rc = 1;
+	   	goto IAVS_ERROR_EXIT;
+		} else if (exec_time < time(0)) {
 			char    *str_time = NULL;
 
 			str_time = ctime(&exec_time);
@@ -6983,6 +6984,7 @@ pbsv1mod_meth_is_attrib_val_settable(PyObject *self, PyObject *args, PyObject *k
 			rc = 1;
 			goto IAVS_ERROR_EXIT;
 		}
+	}
 	} else if (strcmp(name, ATTR_runcount) == 0) {
 		long	runcount;
 
