@@ -13641,7 +13641,6 @@ for ac_header in  \
 	sys/utsname.h \
 	sys/vfs.h \
 	sys/wait.h \
-	tcl.h \
 	termios.h \
 	time.h \
 	unistd.h \
@@ -15916,12 +15915,16 @@ else
   if test -r "$database_dir/include/pgsql/libpq-fe.h"; then :
   database_inc="-I$database_dir/include/pgsql"
 else
+  if test -r "$database_dir/include/postgresql/libpq-fe.h"; then :
+  database_inc="-I$database_dir/include/postgresql"
+else
   as_fn_error $? "Database headers not found." "$LINENO" 5
+fi
 fi
 fi
   if test "$database_dir" = "/usr"; then :
   # Using system installed PostgreSQL
-    if test -r "/usr/lib64/libpq.so" -o -r "/usr/lib/libpq.so"; then :
+    if test -r "/usr/lib64/libpq.so" -o -r "/usr/lib/libpq.so" -o -r "/usr/lib/x86_64-linux-gnu/libpq.so"; then :
   database_lib="-lpq"
 else
   as_fn_error $? "PBS database shared object library not found." "$LINENO" 5
@@ -16423,7 +16426,7 @@ else
 fi
   if test "$expat_dir" = "/usr"; then :
   # Using system installed expat
-    if test -r "/usr/lib64/libexpat.so" -o -r "/usr/lib/libexpat.so"; then :
+    if test -r "/usr/lib64/libexpat.so" -o -r "/usr/lib/libexpat.so" -o -r "/usr/lib/x86_64-linux-gnu/libexpat.so"; then :
   expat_lib="-lexpat"
 else
   as_fn_error $? "expat shared object library not found." "$LINENO" 5
@@ -16481,7 +16484,11 @@ else
   if test -r /usr/lib/libedit.so; then :
   editline_lib="-ledit"
 else
+  if test -r /usr/lib/x86_64-linux-gnu/libedit.so; then :
+  editline_lib="-ledit"
+else
   as_fn_error $? "editline shared object library not found." "$LINENO" 5
+fi
 fi
 fi
 else
@@ -16619,7 +16626,7 @@ else
 fi
   if test "$hwloc_dir" = "/usr"; then :
   # Using system installed hwloc
-    if test -r "/usr/lib64/libhwloc.so" -o -r "/usr/lib/libhwloc.so"; then :
+    if test -r "/usr/lib64/libhwloc.so" -o -r "/usr/lib/libhwloc.so" -o -r "/usr/lib/x86_64-linux-gnu/libhwloc.so"; then :
   hwloc_lib="-lhwloc"
 else
   as_fn_error $? "hwloc shared object library not found." "$LINENO" 5
@@ -16713,16 +16720,16 @@ else
 fi
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for libical" >&5
 $as_echo_n "checking for libical... " >&6; }
-  if test -r "$libical_dir/include/ical.h"; then :
+  if test -r "$libical_dir/include/libical/ical.h"; then :
   if test "$libical_dir" != "/usr"; then :
-  libical_inc="-I$libical_dir/include"
+  libical_inc="-I$libical_dir/include/libical"
 fi
 else
   as_fn_error $? "libical headers not found." "$LINENO" 5
 fi
   if test "$libical_dir" = "/usr"; then :
   # Using system installed libical
-    if test -r "/usr/lib64/libical.so" -o -r "/usr/lib/libical.so"; then :
+    if test -r "/usr/lib64/libical.so" -o -r "/usr/lib/libical.so" -o -r "/usr/lib/x86_64-linux-gnu/libical.so"; then :
   libical_lib="-lical"
 else
   as_fn_error $? "libical shared object library not found." "$LINENO" 5
@@ -16823,7 +16830,11 @@ else
   if test -r "$tcl_dir/lib/tclConfig.sh"; then :
   . "$tcl_dir/lib/tclConfig.sh"
 else
+  if test -r "$tcl_dir/lib/x86_64-linux-gnu/tclConfig.sh"; then :
+  . "$tcl_dir/lib/x86_64-linux-gnu/tclConfig.sh"
+else
   as_fn_error $? "tclConfig.sh not found" "$LINENO" 5
+fi
 fi
 fi
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $tcl_dir" >&5
@@ -16845,7 +16856,11 @@ else
   if test -r "$tcl_dir/lib/tkConfig.sh"; then :
   . "$tcl_dir/lib/tkConfig.sh"
 else
+  if test -r "$tcl_dir/lib/x86_64-linux-gnu/tkConfig.sh"; then :
+  . "$tcl_dir/lib/x86_64-linux-gnu/tkConfig.sh"
+else
   as_fn_error $? "tkConfig.sh not found" "$LINENO" 5
+fi
 fi
 fi
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $tcl_dir" >&5
