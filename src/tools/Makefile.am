@@ -47,7 +47,6 @@ bin_PROGRAMS = \
 sbin_PROGRAMS = \
 	pbs_ds_monitor \
 	pbs_idled \
-	pbs_probe \
 	pbs_upgrade_job
 
 EXTRA_PROGRAMS = \
@@ -89,10 +88,6 @@ pbs_idled_SOURCES = pbs_idled.c
 pbs_hostn_CPPFLAGS = -I$(top_srcdir)/src/include
 pbs_hostn_LDADD = ${common_libs}
 pbs_hostn_SOURCES = hostn.c
-
-pbs_probe_CPPFLAGS = -I$(top_srcdir)/src/include
-pbs_probe_LDADD = ${common_libs}
-pbs_probe_SOURCES = pbs_probe.c
 
 pbs_python_CPPFLAGS =  \
 	-I$(top_srcdir)/src/include \

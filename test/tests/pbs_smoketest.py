@@ -667,15 +667,6 @@ class SmokeTest(PBSTestSuite):
         self.logger.info('Expected order: ' + ','.join(job_order))
         self.assertTrue(cycle.political_order == job_order)
 
-    def test_pbs_probe(self):
-        """
-        Verify that pbs_probe runs and returns 0 when no errors are detected
-        """
-        probe = os.path.join(self.server.pbs_conf['PBS_EXEC'], 'sbin',
-                             'pbs_probe')
-        ret = self.du.run_cmd(self.server.hostname, [probe], sudo=True)
-        self.assertEqual(ret['rc'], 0)
-
     def test_printjob(self):
         """
         Verify that printjob can be executed
