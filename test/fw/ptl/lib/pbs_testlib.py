@@ -1,6 +1,6 @@
 # coding: utf-8
 
-# Copyright (C) 1994-2018 Altair Engineering, Inc.
+# Copyright (C) 1994-2017 Altair Engineering, Inc.
 # For more information, contact Altair at www.altair.com.
 #
 # This file is part of the PBS Professional ("PBS Pro") software.
@@ -13,23 +13,24 @@
 # later version.
 #
 # PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE.
-# See the GNU Affero General Public License for more details.
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 # Commercial License Information:
 #
-# For a copy of the commercial license terms and conditions,
-# go to: (http://www.pbspro.com/UserArea/agreement.html)
-# or contact the Altair Legal Department.
+# The PBS Pro software is licensed under the terms of the GNU Affero General
+# Public License agreement ("AGPL"), except where a separate commercial license
+# agreement for PBS Pro version 14 or later has been executed in writing with
+# Altair.
 #
 # Altair’s dual-license business model allows companies, individuals, and
 # organizations to create proprietary derivative works of PBS Pro and
-# distribute them - whether embedded or bundled with other software -
-# under a commercial license agreement.
+# distribute them - whether embedded or bundled with other software - under
+# a commercial license agreement.
 #
 # Use of Altair’s trademarks, including but not limited to "PBS™",
 # "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
@@ -10504,21 +10505,21 @@ class Scheduler(PBSService):
         """
         return super(Scheduler, self)._all_instance_pids(inst=self)
 
-    def start(self, sched_port=None, sched_home=None, args=None,
-              launcher=None):
+    def start(self, sched_home=None, args=None, launcher=None):
         """
         Start the scheduler
-
+        :param sched_home: Path to scheduler log and home directory
+        :type sched_home: str
         :param args: Arguments required to start the scheduler
         :type args: str
         :param launcher: Optional utility to invoke the launch of the service
         :type launcher: str or list
         """
-        if self.attributes['id'] != 'default' and sched_port is not None:
+        if self.attributes['id'] != 'default':
             cmd = [os.path.join(self.pbs_conf['PBS_EXEC'],
                                 'sbin', 'pbs_sched')]
             cmd += ['-I', self.attributes['id']]
-            cmd += ['-S', sched_port]
+            cmd += ['-S', self.attributes['sched_port']]
             if sched_home is not None:
                 cmd += ['-d', sched_home]
             try:
@@ -10997,6 +10998,29 @@ class Scheduler(PBSService):
         self.fairshare_tree = None
         self.resource_group = None
         return self.isUp()
+
+    def create_scheduler(self, sched_home=None):
+        """
+        Start scheduler with creating required directories for scheduler
+        :param sched_name: scheduler name
+        :type sched_name: str
+        :param sched_home: path of scheduler home and log directory
+        :type sched_home: str
+        """
+        pbs_home = self.server.pbs_conf['PBS_HOME']
+        if sched_home is None:
+            sched_home = pbs_home
+        sched_priv_dir = 'sched_priv_' + self.attributes.get('id')
+        sched_logs_dir = 'sched_logs_' + self.attributes.get('id')
+        if not os.path.exists(os.path.join(sched_home, sched_priv_dir)):
+            self.du.run_copy(self.server.hostname,
+                             os.path.join(pbs_home, 'sched_priv'),
+                             os.path.join(sched_home, sched_priv_dir),
+                             recursive=True)
+        if not os.path.exists(os.path.join(sched_home, sched_logs_dir)):
+            self.du.mkdir(path=os.path.join(sched_home, sched_logs_dir),
+                          sudo=True)
+        self.start(sched_home)
 
     def save_configuration(self, outfile, mode='a'):
         """
