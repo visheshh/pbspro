@@ -213,13 +213,13 @@ int
 find_assoc_sched_pque(pbs_queue *pq, pbs_sched **target_sched)
 {
 	pbs_sched *psched;
-	attribute *part_attr;
 
 	*target_sched = NULL;
 	if (pq == NULL)
 		return 0;
 
 	if (pq->qu_attr[QA_ATR_partition].at_flags & ATR_VFLAG_SET) {
+		attribute *part_attr;
 		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
 			part_attr = &(psched->sch_attr[SCHED_ATR_partition]);
 			if (part_attr->at_flags & ATR_VFLAG_SET) {

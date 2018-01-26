@@ -2379,8 +2379,6 @@ sched_settings_frm_svr(struct batch_status *status)
 	char *tmp_comment = NULL;
 	int clear_comment = 0;
 	extern char *partitions;
-	static char *priv_dir = NULL;
-	static char *log_dir = NULL;
 
 	attr = status->attribs;
 
@@ -2410,6 +2408,8 @@ sched_settings_frm_svr(struct batch_status *status)
 		struct attropl *patt;
 		char comment[MAX_LOG_SIZE] = {0};
 		int validation_failed = 0;
+		static char *priv_dir = NULL;
+		static char *log_dir = NULL;
 		if ((log_dir != NULL) && strcmp(log_dir, tmp_log_dir) != 0) {
 			(void)snprintf(path_log,  sizeof(path_log), tmp_log_dir);
 			log_close(1);
@@ -2571,8 +2571,8 @@ sched_settings_frm_svr(struct batch_status *status)
 		err = pbs_manager(connector,
 				MGR_CMD_UNSET, MGR_OBJ_SCHED,
 			sc_name, attribs, NULL);
-		free(attribs);
 		free(attribs->value);
+		free(attribs);
 		free(tmp_comment);
 		if (err) {
 			snprintf(log_buffer, sizeof(log_buffer), "Failed to update scheduler comment at the server");
