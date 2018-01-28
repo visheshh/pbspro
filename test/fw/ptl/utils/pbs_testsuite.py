@@ -1,6 +1,6 @@
 # coding: utf-8
 
-# Copyright (C) 1994-2018 Altair Engineering, Inc.
+# Copyright (C) 1994-2017 Altair Engineering, Inc.
 # For more information, contact Altair at www.altair.com.
 #
 # This file is part of the PBS Professional ("PBS Pro") software.
@@ -13,23 +13,24 @@
 # later version.
 #
 # PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE.
-# See the GNU Affero General Public License for more details.
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 # Commercial License Information:
 #
-# For a copy of the commercial license terms and conditions,
-# go to: (http://www.pbspro.com/UserArea/agreement.html)
-# or contact the Altair Legal Department.
+# The PBS Pro software is licensed under the terms of the GNU Affero General
+# Public License agreement ("AGPL"), except where a separate commercial license
+# agreement for PBS Pro version 14 or later has been executed in writing with
+# Altair.
 #
 # Altair’s dual-license business model allows companies, individuals, and
 # organizations to create proprietary derivative works of PBS Pro and
-# distribute them - whether embedded or bundled with other software -
-# under a commercial license agreement.
+# distribute them - whether embedded or bundled with other software - under
+# a commercial license agreement.
 #
 # Use of Altair’s trademarks, including but not limited to "PBS™",
 # "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
@@ -398,7 +399,8 @@ class PBSTestSuite(unittest.TestCase):
     mom = None
     comm = None
     servers = None
-    schedulers = None
+    schedulers = {}
+    scheds = None
     moms = None
     comms = None
 
@@ -668,12 +670,20 @@ class PBSTestSuite(unittest.TestCase):
         """
         if init_sched_func is None:
             init_sched_func = cls.init_scheduler
-        cls.schedulers = cls.init_from_conf(conf=cls.conf,
-                                            single='scheduler',
-                                            multiple='schedulers', skip=skip,
-                                            func=init_sched_func)
-        if cls.schedulers:
-            cls.scheduler = cls.schedulers.values()[0]
+        cls.scheds = cls.init_from_conf(conf=cls.conf,
+                                        single='scheduler',
+                                        multiple='schedulers', skip=skip,
+                                        func=init_sched_func)
+        if cls.scheds:
+            cls.scheduler = cls.scheds.values()[0]
+
+        for sched in cls.scheds.values():
+            if sched.server.name in cls.schedulers:
+                continue
+            else:
+                cls.schedulers[sched.server.name] = sched.server.schedulers
+        # creating a short hand for current host server.schedulers
+        cls.scheds = cls.server.schedulers
 
     @classmethod
     def init_moms(cls, init_mom_func=None, skip='nomom'):
@@ -817,8 +827,9 @@ class PBSTestSuite(unittest.TestCase):
         """
         Revert the values set for schedulers
         """
-        for sched in self.schedulers.values():
-            self.revert_scheduler(sched, force)
+        for server in self.schedulers.values():
+            for sched in server.values():
+                self.revert_scheduler(sched, force)
 
     def revert_moms(self, force=False):
         """

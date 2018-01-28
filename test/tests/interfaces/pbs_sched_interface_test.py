@@ -1,6 +1,6 @@
 # coding: utf-8
 
-# Copyright (C) 1994-2018 Altair Engineering, Inc.
+# Copyright (C) 1994-2017 Altair Engineering, Inc.
 # For more information, contact Altair at www.altair.com.
 #
 # This file is part of the PBS Professional ("PBS Pro") software.
@@ -13,30 +13,30 @@
 # later version.
 #
 # PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE.
-# See the GNU Affero General Public License for more details.
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 # Commercial License Information:
 #
-# For a copy of the commercial license terms and conditions,
-# go to: (http://www.pbspro.com/UserArea/agreement.html)
-# or contact the Altair Legal Department.
+# The PBS Pro software is licensed under the terms of the GNU Affero General
+# Public License agreement ("AGPL"), except where a separate commercial license
+# agreement for PBS Pro version 14 or later has been executed in writing with
+# Altair.
 #
 # Altair’s dual-license business model allows companies, individuals, and
 # organizations to create proprietary derivative works of PBS Pro and
-# distribute them - whether embedded or bundled with other software -
-# under a commercial license agreement.
+# distribute them - whether embedded or bundled with other software - under
+# a commercial license agreement.
 #
 # Use of Altair’s trademarks, including but not limited to "PBS™",
 # "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
 # trademark licensing policies.
 
 from tests.interfaces import *
-import shutil
 
 
 @tags('multisched')
@@ -54,28 +54,7 @@ class TestSchedulerInterface(TestInterfaces):
         self.server.manager(MGR_CMD_CREATE,
                             SCHED, a,
                             id="TestCommonSched")
-        self.server.manager(MGR_CMD_SET, SCHED,
-                            {'sched_port': 15051},
-                            id="TestCommonSched")
-        self.sched_configure("TestCommonSched", '15051')
-
-    def sched_configure(self, sched_name, sched_port, sched_home=None):
-        pbs_home = self.server.pbs_conf['PBS_HOME']
-        if sched_home is None:
-            sched_home = pbs_home
-        sched_priv_dir = 'sched_priv_' + sched_name
-        sched_logs_dir = 'sched_logs_' + sched_name
-        if not os.path.exists(os.path.join(sched_home, sched_priv_dir)):
-            self.du.run_copy(self.server.hostname,
-                             os.path.join(pbs_home, 'sched_priv'),
-                             os.path.join(sched_home, sched_priv_dir),
-                             recursive=True)
-        if not os.path.exists(os.path.join(sched_home, sched_logs_dir)):
-            self.du.run_copy(self.server.hostname,
-                             os.path.join(pbs_home, 'sched_logs'),
-                             os.path.join(sched_home, sched_logs_dir),
-                             recursive=True)
-        self.server.schedulers[sched_name].start(sched_port, sched_home)
+        self.scheds['TestCommonSched'].create_scheduler()
 
     def test_duplicate_scheduler_name(self):
         """
@@ -84,11 +63,26 @@ class TestSchedulerInterface(TestInterfaces):
         try:
             self.server.manager(MGR_CMD_CREATE,
                                 SCHED,
+                                {'sched_port': '15052'},
                                 id="TestCommonSched")
         except PbsManagerError as e:
             if self.server.get_op_mode() == PTL_CLI:
                 self.assertTrue(
                     'qmgr: Error (15211) returned from server' in e.msg[1])
+
+    def test_invalid_sched_port(self):
+        """
+        Test setting invalid port.
+        """
+        try:
+            self.server.manager(MGR_CMD_SET, SCHED,
+                                {'sched_port': 'asdf'},
+                                id="TestCommonSched",
+                                runas=ROOT_USER)
+        except PbsManagerError as e:
+            err_msg = "Illegal attribute or resource value"
+            self.assertTrue(err_msg in e.msg[0],
+                            "Error message is not expected")
 
     def test_permission_on_scheduler(self):
         """
@@ -98,6 +92,7 @@ class TestSchedulerInterface(TestInterfaces):
         try:
             self.server.manager(MGR_CMD_CREATE,
                                 SCHED,
+                                {'sched_port': '15052'},
                                 id="testCreateSched",
                                 runas=OPER_USER)
         except PbsManagerError as e:
@@ -107,12 +102,14 @@ class TestSchedulerInterface(TestInterfaces):
 
         self.server.manager(MGR_CMD_CREATE,
                             SCHED,
+                            {'sched_port': '15052'},
                             id="testCreateSched",
                             runas=ROOT_USER)
 
         # Check for delete permission
         self.server.manager(MGR_CMD_CREATE,
                             SCHED,
+                            {'sched_port': '15052'},
                             id="testDeleteSched")
         try:
             self.server.manager(MGR_CMD_DELETE,
@@ -128,7 +125,6 @@ class TestSchedulerInterface(TestInterfaces):
                             SCHED,
                             id="testDeleteSched",
                             runas=ROOT_USER)
-        print self.server.schedulers
 
         # Check for attribute set permission
         try:
@@ -218,7 +214,7 @@ class TestSchedulerInterface(TestInterfaces):
         Test setting of sched_priv and sched_log to a
         value assigned to another scheduler
         """
-        err_msg = "Another Sched object also has same "
+        err_msg = "Another scheduler also has same "
         err_msg += "value for its sched_priv directory"
         try:
             self.server.manager(MGR_CMD_SET, SCHED,
@@ -227,7 +223,7 @@ class TestSchedulerInterface(TestInterfaces):
         except PbsManagerError as e:
             self.assertTrue(err_msg in e.msg[0],
                             "Error message is not expected")
-        err_msg = "Another Sched object also has same "
+        err_msg = "Another scheduler also has same "
         err_msg += "value for its sched_log directory"
         try:
             self.server.manager(MGR_CMD_SET, SCHED,
