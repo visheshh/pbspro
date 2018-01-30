@@ -1,6 +1,6 @@
 # coding: utf-8
 
-# Copyright (C) 1994-2017 Altair Engineering, Inc.
+# Copyright (C) 1994-2018 Altair Engineering, Inc.
 # For more information, contact Altair at www.altair.com.
 #
 # This file is part of the PBS Professional ("PBS Pro") software.
@@ -13,24 +13,23 @@
 # later version.
 #
 # PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.
+# See the GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Commercial License Information:
 #
-# The PBS Pro software is licensed under the terms of the GNU Affero General
-# Public License agreement ("AGPL"), except where a separate commercial license
-# agreement for PBS Pro version 14 or later has been executed in writing with
-# Altair.
+# For a copy of the commercial license terms and conditions,
+# go to: (http://www.pbspro.com/UserArea/agreement.html)
+# or contact the Altair Legal Department.
 #
 # Altair’s dual-license business model allows companies, individuals, and
 # organizations to create proprietary derivative works of PBS Pro and
-# distribute them - whether embedded or bundled with other software - under
-# a commercial license agreement.
+# distribute them - whether embedded or bundled with other software -
+# under a commercial license agreement.
 #
 # Use of Altair’s trademarks, including but not limited to "PBS™",
 # "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
@@ -39,7 +38,6 @@
 from tests.functional import *
 
 
-@tags('multisched')
 class TestMultipleSchedulers(TestFunctional):
 
     """
@@ -53,6 +51,7 @@ class TestMultipleSchedulers(TestFunctional):
         self.server.manager(MGR_CMD_CREATE, SCHED,
                             a, id="sc1")
         self.scheds['sc1'].create_scheduler()
+        self.scheds['sc1'].start()
         self.server.manager(MGR_CMD_SET, SCHED,
                             {'scheduling': 'True'}, id="sc1", expect=True)
 
@@ -68,6 +67,7 @@ class TestMultipleSchedulers(TestFunctional):
         self.server.manager(MGR_CMD_CREATE, SCHED,
                             a, id="sc2")
         self.scheds['sc2'].create_scheduler(dir_path)
+        self.scheds['sc2'].start(dir_path)
         self.server.manager(MGR_CMD_SET, SCHED,
                             {'scheduling': 'True'}, id="sc2", expect=True)
 
@@ -78,6 +78,7 @@ class TestMultipleSchedulers(TestFunctional):
         self.server.manager(MGR_CMD_CREATE, SCHED,
                             a, id="sc3")
         self.scheds['sc3'].create_scheduler()
+        self.scheds['sc3'].start()
         self.server.manager(MGR_CMD_SET, SCHED,
                             {'scheduling': 'True'}, id="sc3", expect=True)
 
@@ -316,9 +317,8 @@ class TestMultipleSchedulers(TestFunctional):
 
     def test_multiple_partition_same_sched(self):
         """
-        Test that scheduler will serve all the jobs from all the
-        different partition queues and will schedule them on all the
-        partition nodes available to the scheduler.
+        Test that scheduler will serve the jobs from different
+        partition and run on nodes assigned to respective partitions.
         """
         self.setup_sc1()
         self.setup_queues_nodes()
@@ -393,7 +393,9 @@ class TestMultipleSchedulers(TestFunctional):
         j = Job(TEST_USER1, attrs={ATTR_queue: 'wq4',
                                    'Resource_List.select': '1:ncpus=2'})
         jid5 = self.server.submit(j)
-        self.server.expect(JOB, {'job_state': 'Q'}, id=jid5)
+        job_c = 'Not Running: No available resources on nodes'
+        self.server.expect(JOB, {'comment': job_c, 'job_state': 'Q'},
+                           attrop=PTL_AND, id=jid5)
         self.server.expect(JOB, {'job_state': 'S'}, id=jid1)
         self.server.schedulers['sc1'].log_match(
             jid1 + ';Job preempted by suspension',
@@ -543,8 +545,7 @@ class TestMultipleSchedulers(TestFunctional):
 
     def test_qrun_job(self):
         """
-        Test jobs are sorted as per job_sort_formula
-        inside each scheduler
+        Test jobs can be run by qrun bypassing the scheduler.
         """
         self.setup_sc1()
         self.setup_queues_nodes()

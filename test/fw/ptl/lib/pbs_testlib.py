@@ -1,6 +1,6 @@
 # coding: utf-8
 
-# Copyright (C) 1994-2017 Altair Engineering, Inc.
+# Copyright (C) 1994-2018 Altair Engineering, Inc.
 # For more information, contact Altair at www.altair.com.
 #
 # This file is part of the PBS Professional ("PBS Pro") software.
@@ -13,24 +13,23 @@
 # later version.
 #
 # PBS Pro is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.
+# See the GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Commercial License Information:
 #
-# The PBS Pro software is licensed under the terms of the GNU Affero General
-# Public License agreement ("AGPL"), except where a separate commercial license
-# agreement for PBS Pro version 14 or later has been executed in writing with
-# Altair.
+# For a copy of the commercial license terms and conditions,
+# go to: (http://www.pbspro.com/UserArea/agreement.html)
+# or contact the Altair Legal Department.
 #
 # Altair’s dual-license business model allows companies, individuals, and
 # organizations to create proprietary derivative works of PBS Pro and
-# distribute them - whether embedded or bundled with other software - under
-# a commercial license agreement.
+# distribute them - whether embedded or bundled with other software -
+# under a commercial license agreement.
 #
 # Use of Altair’s trademarks, including but not limited to "PBS™",
 # "PBS Professional®", and "PBS Pro™" and Altair’s logos is subject to Altair's
@@ -10519,7 +10518,7 @@ class Scheduler(PBSService):
             cmd = [os.path.join(self.pbs_conf['PBS_EXEC'],
                                 'sbin', 'pbs_sched')]
             cmd += ['-I', self.attributes['id']]
-            cmd += ['-S', self.attributes['sched_port']]
+            cmd += ['-S', str(self.attributes['sched_port'])]
             if sched_home is not None:
                 cmd += ['-d', sched_home]
             try:
@@ -11003,8 +11002,6 @@ class Scheduler(PBSService):
     def create_scheduler(self, sched_home=None):
         """
         Start scheduler with creating required directories for scheduler
-        :param sched_name: scheduler name
-        :type sched_name: str
         :param sched_home: path of scheduler home and log directory
         :type sched_home: str
         """
@@ -11021,7 +11018,6 @@ class Scheduler(PBSService):
         if not os.path.exists(os.path.join(sched_home, sched_logs_dir)):
             self.du.mkdir(path=os.path.join(sched_home, sched_logs_dir),
                           sudo=True)
-        self.start(sched_home)
 
     def save_configuration(self, outfile, mode='a'):
         """
