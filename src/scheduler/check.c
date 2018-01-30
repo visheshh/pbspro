@@ -1568,17 +1568,17 @@ check_nodes(status *policy, server_info *sinfo, queue_info *qinfo, resource_resv
 		else
 			nodepart = NULL;
 
-		if (resresv->is_job && qinfo->has_partition)
-			ninfo_arr = qinfo->nodes_in_partition;
-		else {
+		if (resresv->is_job) {
 			/* if there are nodes assigned to the queue, then check those */
-			if (resresv->is_job && qinfo->has_nodes)
+			if (qinfo->has_nodes)
 				ninfo_arr = qinfo->nodes;
-			/* last up we're not in a queue with nodes -- use the unassociated nodes */
+			else if (qinfo->partition != NULL)
+				ninfo_arr = qinfo->nodes_in_partition;
 			else
 				ninfo_arr = sinfo->unassoc_nodes;
-		}
-
+		} else
+			/* last up we're not in a queue with nodes -- use the unassociated nodes */
+			ninfo_arr = sinfo->unassoc_nodes;
 	}
 
 	if (resresv->node_set_str != NULL) {

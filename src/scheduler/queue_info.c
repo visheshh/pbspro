@@ -221,7 +221,7 @@ query_queues(status *policy, int pbs_sd, server_info *sinfo)
 				qinfo->num_nodes = count_array((void **) qinfo->nodes);
 
 			} else if (qinfo->partition != NULL) {
-				qinfo->nodes_in_partition= node_filter(sinfo->nodes, sinfo->num_nodes,
+				qinfo->nodes_in_partition = node_filter(sinfo->nodes, sinfo->num_nodes,
 						node_partition_cmp, (void *) qinfo->partition, 0);
 				qinfo->num_nodes = count_array((void **) qinfo->nodes_in_partition);
 			}
@@ -398,9 +398,6 @@ query_queue_info(status *policy, struct batch_status *queue, server_info *sinfo)
 					log_err(errno, __func__, MEM_ERR_MSG);
 					return NULL;
 				}
-				qinfo->has_partition = 1;
-			} else {
-				qinfo->has_partition = 0;
 			}
 		}
 		else if (is_reslimattr(attrp)) {
@@ -547,7 +544,6 @@ new_queue_info(int limallocflag)
 	qinfo->is_nonprime_queue = 0;
 	qinfo->is_ok_to_run	 = 0;
 	qinfo->has_nodes = 0;
-	qinfo->has_partition = 0;
 	qinfo->priority	 = 0;
 	qinfo->has_soft_limit = 0;
 	qinfo->has_hard_limit = 0;
@@ -924,7 +920,6 @@ dup_queue_info(queue_info *oqinfo, server_info *nsinfo)
 	nqinfo->is_prime_queue = oqinfo->is_prime_queue;
 	nqinfo->is_nonprime_queue = oqinfo->is_nonprime_queue;
 	nqinfo->has_nodes = oqinfo->has_nodes;
-	nqinfo->has_partition = oqinfo->has_partition;
 	nqinfo->has_soft_limit = oqinfo->has_soft_limit;
 	nqinfo->has_hard_limit = oqinfo->has_hard_limit;
 	nqinfo->is_peer_queue = oqinfo->is_peer_queue;

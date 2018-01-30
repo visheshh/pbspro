@@ -1627,7 +1627,7 @@ mgr_server_unset(struct batch_request *preq)
 			if (dflt_scheduler) {
 				svrattrl *tm_list;
 				tm_list = attrlist_create(plist->al_name, NULL, 0);
-				if (tm_list == (svrattrl *)0) {
+				if (tm_list == NULL) {
 					reply_badattr(-1, bad_attr, plist, preq);
 				}
 				tm_list->al_link.ll_next->ll_struct = NULL;
@@ -1732,7 +1732,7 @@ mgr_sched_unset(struct batch_request *preq)
 			if (dflt_scheduler) {
 				svrattrl *t_list;
 				t_list = attrlist_create(tmp_plist->al_name, NULL, 0);
-				if (t_list == (svrattrl *)0) {
+				if (t_list == NULL) {
 					reply_badattr(-1, bad_attr, tmp_plist, preq);
 				}
 				t_list->al_link.ll_next->ll_struct = NULL;

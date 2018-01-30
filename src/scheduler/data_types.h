@@ -371,7 +371,6 @@ struct queue_info
 	unsigned is_prime_queue:1;	/* only run jobs in primetime */
 	unsigned is_nonprime_queue:1;	/* only run jobs in nonprimetime */
 	unsigned has_nodes:1;		/* does this queue have nodes assoc with it */
-	unsigned has_partition:1;	/* does this queue has partition assoc with it */
 	unsigned has_soft_limit:1;	/* queue has a soft user/grp limit set */
 	unsigned has_hard_limit:1;	/* queue has a hard user/grp limit set */
 	unsigned is_peer_queue:1;	/* queue is a peer queue */
