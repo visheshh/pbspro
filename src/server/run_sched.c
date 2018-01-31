@@ -175,8 +175,6 @@ int
 find_assoc_sched_jid(char *jid, pbs_sched **target_sched)
 {
 	job *pj;
-	pbs_queue *pq;
-	char *q_name;
 	int t;
 
 	*target_sched = NULL;
@@ -190,12 +188,7 @@ find_assoc_sched_jid(char *jid, pbs_sched **target_sched)
 	if (pj == NULL)
 		return 0;
 
-	q_name = pj->ji_qs.ji_queue;
-	pq = find_queuebyname(q_name);
-	if (pq == NULL)
-		return 0;
-
-	return find_assoc_sched_pque(pq, target_sched);
+	return find_assoc_sched_pque(pj->ji_qhdr, target_sched);
 }
 
 /**

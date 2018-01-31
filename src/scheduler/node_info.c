@@ -5700,3 +5700,26 @@ node_in_partition(node_info *ninfo)
 	}
 }
 
+/**
+ * @brief
+ *		node_partition_cmp - used with node_filter to filter nodes attached to a
+ *		   specific partition
+ *
+ * @param[in]	node	-	the node we're currently filtering
+ * @param[in]	arg	-	the name of the partition
+ *
+ * @return	int
+ * @return	1	: keep the node
+ * @return	0	: don't keep the node
+ *
+ */
+int
+node_partition_cmp(node_info *ninfo, void *arg)
+{
+	if (ninfo->partition != NULL)
+		if (!strcmp(ninfo->partition,  (char *) arg))
+			return 1;
+
+	return 0;
+}
+

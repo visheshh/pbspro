@@ -2379,6 +2379,7 @@ sched_settings_frm_svr(struct batch_status *status)
 	struct	attropl	*attribs;
 	char *tmp_comment = NULL;
 	int clear_comment = 0;
+	int ret = 0;
 	extern char *partitions;
 
 	attr = status->attribs;
@@ -2388,16 +2389,16 @@ sched_settings_frm_svr(struct batch_status *status)
 		if (attr->name != NULL && attr->value != NULL) {
 			if (!strcmp(attr->name, ATTR_sched_priv)) {
 				if ((tmp_priv_dir = string_dup(attr->value)) == NULL)
-					return 0;
+					goto cleanup;
 			} else if (!strcmp(attr->name, ATTR_sched_log)) {
 				if ((tmp_log_dir = string_dup(attr->value)) == NULL)
-					return 0;
+					goto cleanup;
 			} else if (!strcmp(attr->name, ATTR_partition)) {
 				if ((tmp_partitions = string_dup(attr->value)) == NULL)
-					return 0;
+					goto cleanup;
 			} else if (!strcmp(attr->name, ATTR_comment)) {
 				if ((tmp_comment = string_dup(attr->value)) == NULL)
-					return 0;
+					goto cleanup;
 			}
 		}
 		attr = attr->next;
@@ -2417,15 +2418,7 @@ sched_settings_frm_svr(struct batch_status *status)
 				attribs = calloc(2, sizeof(struct attropl));
 				if (attribs == NULL) {
 					schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, MEM_ERR_MSG);
-					if (tmp_log_dir != NULL)
-						free(tmp_log_dir);
-					if (tmp_priv_dir != NULL)
-						free(tmp_priv_dir);
-					if (tmp_partitions != NULL)
-						free(tmp_partitions);
-					if (tmp_comment != NULL)
-						free(tmp_comment);
-					return 0;
+					goto cleanup;
 				}
 				strncpy(comment, "Unable to change the sched_log directory", MAX_LOG_SIZE - 1);
 				patt = attribs;
@@ -2445,15 +2438,7 @@ sched_settings_frm_svr(struct batch_status *status)
 					snprintf(log_buffer, sizeof(log_buffer), "Failed to update scheduler comment %s at the server", comment);
 					schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, log_buffer);
 				}
-				if (tmp_log_dir != NULL)
-					free(tmp_log_dir);
-				if (tmp_priv_dir != NULL)
-					free(tmp_priv_dir);
-				if (tmp_partitions != NULL)
-					free(tmp_partitions);
-				if (tmp_comment != NULL)
-					free(tmp_comment);
-				return 0;
+				goto cleanup;
 			} else {
 				if (tmp_comment != NULL)
 					clear_comment = 1;
@@ -2517,15 +2502,7 @@ sched_settings_frm_svr(struct batch_status *status)
 			if (attribs == NULL) {
 				schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, MEM_ERR_MSG);
 				strncpy(comment, "Unable to change the sched_priv directory", MAX_LOG_SIZE);
-				if (tmp_log_dir != NULL)
-					free(tmp_log_dir);
-				if (tmp_priv_dir != NULL)
-					free(tmp_priv_dir);
-				if (tmp_partitions != NULL)
-					free(tmp_partitions);
-				if (tmp_comment != NULL)
-					free(tmp_comment);
-				return 0;
+				goto cleanup;
 			}
 			patt = attribs;
 			patt->name = ATTR_comment;
@@ -2543,19 +2520,13 @@ sched_settings_frm_svr(struct batch_status *status)
 				snprintf(log_buffer, sizeof(log_buffer), "Failed to update scheduler comment %s at the server", comment);
 				schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, log_buffer);
 			}
-			if (tmp_log_dir != NULL)
-				free(tmp_log_dir);
-			if (tmp_priv_dir != NULL)
-				free(tmp_priv_dir);
-			if (tmp_partitions != NULL)
-				free(tmp_partitions);
-			if (tmp_comment != NULL)
-				free(tmp_comment);
-			return 0;
+			goto cleanup;
 		}
 		if (cstrcmp(partitions, tmp_partitions) != 0) {
 			free(partitions);
-			partitions = tmp_partitions;
+			partitions = NULL;
+			if ((tmp_partitions != NULL) && (partitions = string_dup(tmp_partitions)) == NULL)
+				goto cleanup;
 		}
 	}
 	if (clear_comment) {
@@ -2565,13 +2536,7 @@ sched_settings_frm_svr(struct batch_status *status)
 		attribs = calloc(1, sizeof(struct attropl));
 		if (attribs == NULL) {
 			schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, MEM_ERR_MSG);
-			if (tmp_log_dir != NULL)
-				free(tmp_log_dir);
-			if (tmp_priv_dir != NULL)
-				free(tmp_priv_dir);
-			if (tmp_comment != NULL)
-				free(tmp_comment);
-			return 0;
+			goto cleanup;
 		}
 
 		patt = attribs;
@@ -2580,13 +2545,7 @@ sched_settings_frm_svr(struct batch_status *status)
 		if (patt->value == NULL) {
 			snprintf(log_buffer, sizeof(log_buffer), "can't update scheduler attribs, malloc failed");
 			schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, log_buffer);
-			if (tmp_log_dir != NULL)
-				free(tmp_log_dir);
-			if (tmp_priv_dir != NULL)
-				free(tmp_priv_dir);
-			if (tmp_comment != NULL)
-				free(tmp_comment);
-			return 0;
+			goto cleanup;
 		}
 		patt->value[0] = '\0';
 		patt->next = NULL;
@@ -2598,25 +2557,17 @@ sched_settings_frm_svr(struct batch_status *status)
 		if (err) {
 			snprintf(log_buffer, sizeof(log_buffer), "Failed to update scheduler comment at the server");
 			schdlog(PBSEVENT_ERROR, PBS_EVENTCLASS_SCHED, LOG_ERR, __func__, log_buffer);
-			if (tmp_log_dir != NULL)
-				free(tmp_log_dir);
-			if (tmp_priv_dir != NULL)
-				free(tmp_priv_dir);
-			if (tmp_comment != NULL)
-				free(tmp_comment);
-			return 0;
+			goto cleanup;
 		}
 		clear_comment = 0;
 	}
-
-	if (tmp_log_dir != NULL)
-		free(tmp_log_dir);
-	if (tmp_priv_dir != NULL)
-		free(tmp_priv_dir);
-	if (tmp_comment != NULL)
-		free(tmp_comment);
-
-	return 1;
+	ret = 1;
+cleanup:
+	free(tmp_log_dir);
+	free(tmp_priv_dir);
+	free(tmp_comment);
+	free(tmp_partitions);
+	return ret;
 
 }
 

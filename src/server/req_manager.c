@@ -1633,9 +1633,12 @@ mgr_server_unset(struct batch_request *preq)
 				tm_list->al_link.ll_next->ll_struct = NULL;
 				rc = mgr_unset_attr(dflt_scheduler->sch_attr, sched_attr_def, SCHED_ATR_LAST, tm_list,
 					-1, &bad_attr, (void *)dflt_scheduler, PARENT_TYPE_SCHED, INDIRECT_RES_CHECK);
-				if (rc != 0)
+				if (rc != 0) {
+					free_svrattrl(tm_list);
 					reply_badattr(rc, bad_attr, plist, preq);
+				}
 				(void)sched_save_db(dflt_scheduler, SVR_SAVE_FULL);
+				free_svrattrl(tm_list);
 			}
 		}
 		plist = (struct svrattrl *)GET_NEXT(plist->al_link);
@@ -1738,9 +1741,12 @@ mgr_sched_unset(struct batch_request *preq)
 				t_list->al_link.ll_next->ll_struct = NULL;
 				rc = mgr_unset_attr(server.sv_attr, svr_attr_def, SRV_ATR_LAST, t_list,
 					-1, &bad_attr, (void *)&server, PARENT_TYPE_SERVER, INDIRECT_RES_CHECK);
-				if (rc != 0)
+				if (rc != 0) {
+					free_svrattrl(t_list);
 					reply_badattr(rc, bad_attr, tmp_plist, preq);
+				}
 				svr_save_db(&server, SVR_SAVE_FULL);
+				free_svrattrl(t_list);
 			}
 		}
 	}
