@@ -228,11 +228,6 @@ class TestMultipleSchedulers(TestFunctional):
                             {'scheduling': 'True'}, id="sc5")
         self.server.expect(SCHED, {'state': 'scheduling'},
                            id='sc5', max_attempts=10)
-        self.scheds['sc5'].terminate()
-        self.du.rm(path=os.path.join(
-            pbs_home, 'sched_priv_sc5'), recursive=True)
-        self.du.rm(path=os.path.join(
-            pbs_home, 'sched_logs_sc5'), recursive=True)
 
     def test_resource_sched_reconfigure(self):
         """
@@ -393,9 +388,8 @@ class TestMultipleSchedulers(TestFunctional):
         j = Job(TEST_USER1, attrs={ATTR_queue: 'wq4',
                                    'Resource_List.select': '1:ncpus=2'})
         jid5 = self.server.submit(j)
-        job_c = 'Not Running: No available resources on nodes'
-        self.server.expect(JOB, {'comment': job_c, 'job_state': 'Q'},
-                           attrop=PTL_AND, id=jid5)
+        self.server.expect(JOB, ATTR_comment, op=SET, id=jid5)
+        self.server.expect(JOB, {'job_state': 'Q'}, id=jid5)
         self.server.expect(JOB, {'job_state': 'S'}, id=jid1)
         self.server.schedulers['sc1'].log_match(
             jid1 + ';Job preempted by suspension',
@@ -545,7 +539,7 @@ class TestMultipleSchedulers(TestFunctional):
 
     def test_qrun_job(self):
         """
-        Test jobs can be run by qrun bypassing the scheduler.
+        Test jobs can be run by qrun by a newly created scheduler.
         """
         self.setup_sc1()
         self.setup_queues_nodes()

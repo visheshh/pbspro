@@ -673,8 +673,6 @@ class PBSTestSuite(unittest.TestCase):
                                         single='scheduler',
                                         multiple='schedulers', skip=skip,
                                         func=init_sched_func)
-        if cls.scheds:
-            cls.scheduler = cls.scheds.values()[0]
 
         for sched in cls.scheds.values():
             if sched.server.name in cls.schedulers:
@@ -683,6 +681,7 @@ class PBSTestSuite(unittest.TestCase):
                 cls.schedulers[sched.server.name] = sched.server.schedulers
         # creating a short hand for current host server.schedulers
         cls.scheds = cls.server.schedulers
+        cls.scheduler = cls.scheds['default']
 
     @classmethod
     def init_moms(cls, init_mom_func=None, skip='nomom'):
@@ -826,9 +825,10 @@ class PBSTestSuite(unittest.TestCase):
         """
         Revert the values set for schedulers
         """
-        for server in self.schedulers.values():
-            for sched in server.values():
-                self.revert_scheduler(sched, force)
+        for scheds in self.schedulers.values():
+            for sched in scheds.keys():
+                if sched == 'default':
+                    self.revert_scheduler(scheds[sched], force)
 
     def revert_moms(self, force=False):
         """

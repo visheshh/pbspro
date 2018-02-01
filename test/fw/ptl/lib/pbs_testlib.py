@@ -6620,7 +6620,7 @@ class Server(PBSService):
                     if rc == 0:
                         rc = tmprc
 
-        if cmd == MGR_CMD_DELETE and oid is not None:
+        if cmd == MGR_CMD_DELETE and oid is not None and rc == 0:
             for i in oid:
                 if obj_type == MGR_OBJ_HOOK and i in self.hooks:
                     del self.hooks[i]
@@ -6641,7 +6641,7 @@ class Server(PBSService):
                 bs_list.append(tbsl)
                 self.update_attributes(obj_type, bs_list)
 
-        if cmd == MGR_CMD_CREATE or cmd == MGR_CMD_UNSET:
+        if cmd == MGR_CMD_CREATE:
             if rc == 0:
                 bsl = self.status(obj_type, attrib, id, extend)
                 self.update_attributes(obj_type, bsl)
@@ -10423,8 +10423,6 @@ class Scheduler(PBSService):
         if hostname is None:
             hostname = self.server.hostname
 
-        self.server.scheduler = self
-
         PBSService.__init__(self, hostname, pbsconf_file=pbsconf_file,
                             diag=diag, diagmap=diagmap)
         _m = ['scheduler ', self.shortname]
@@ -10854,6 +10852,8 @@ class Scheduler(PBSService):
         if validate:
             self.signal('-HUP')
             try:
+                self.log_match("Sched;reconfigure;Scheduler is reconfiguring",
+                               n=10, starttime=reconfig_time)
                 self.log_match("Error reading line", n=10, max_attempts=2,
                                starttime=reconfig_time, existence=False)
             except PtlLogMatchError:
@@ -10875,7 +10875,6 @@ class Scheduler(PBSService):
         :type validate: bool
         """
         self.logger.info(self.logprefix + "config " + str(confs))
-        self.parse_sched_config()
         self.sched_config = dict(self.sched_config.items() + confs.items())
         if apply:
             try:
@@ -10961,10 +10960,19 @@ class Scheduler(PBSService):
         """
         self.logger.info(self.logprefix +
                          "reverting configuration to defaults")
-        self.server.manager(MGR_CMD_DELETE,
-                            SCHED,
-                            id="@default")
         self.server.manager(MGR_CMD_LIST, SCHED)
+        tmpschd = self.server.schedulers.keys()
+        for name in tmpschd:
+            if name != 'default':
+                self.server.schedulers[name].terminate()
+                sched_log = self.server.schedulers[name].attributes.get(
+                    'sched_log')
+                sched_priv = self.server.schedulers[name].attributes.get(
+                    'sched_priv')
+                self.du.rm(path=sched_log, recursive=True)
+                self.du.rm(path=sched_priv, recursive=True)
+                self.server.manager(MGR_CMD_DELETE, SCHED, id=name)
+
         ignore_attrs = ['id', 'pbs_version', 'sched_host',
                         'state', 'sched_port']
         unsetattrs = []

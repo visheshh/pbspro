@@ -295,8 +295,3 @@ class TestSchedulerInterface(TestInterfaces):
                             runas=ROOT_USER)
         self.server.expect(SCHED, {'scheduler_iteration': 500},
                            id='default', max_attempts=10)
-
-    def tearDown(self):
-        self.du.run_cmd(self.server.hostname, [
-                        'pkill', '-9', 'pbs_sched'], sudo=True)
-        TestInterfaces.tearDown(self)
