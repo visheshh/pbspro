@@ -1636,6 +1636,7 @@ mgr_server_unset(struct batch_request *preq)
 				if (rc != 0) {
 					free_svrattrl(tm_list);
 					reply_badattr(rc, bad_attr, plist, preq);
+					return;
 				}
 				(void)sched_save_db(dflt_scheduler, SVR_SAVE_FULL);
 				free_svrattrl(tm_list);
@@ -1744,6 +1745,7 @@ mgr_sched_unset(struct batch_request *preq)
 				if (rc != 0) {
 					free_svrattrl(t_list);
 					reply_badattr(rc, bad_attr, tmp_plist, preq);
+					return;
 				}
 				svr_save_db(&server, SVR_SAVE_FULL);
 				free_svrattrl(t_list);
