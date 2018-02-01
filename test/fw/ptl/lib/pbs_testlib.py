@@ -10874,6 +10874,13 @@ class Scheduler(PBSService):
                          configuration settings.
         :type validate: bool
         """
+        self.logger.info("--------scs------" + str(self.sched_config))
+        self.logger.info("--------scsdflt------" +
+                         str(self.server.schedulers['default'].sched_config))
+        self.parse_sched_config()
+        self.logger.info("--------scsafter------" + str(self.sched_config))
+        self.logger.info("--------scsdfltafter------" +
+                         str(self.server.schedulers['default'].sched_config))
         self.logger.info(self.logprefix + "config " + str(confs))
         self.sched_config = dict(self.sched_config.items() + confs.items())
         if apply:
@@ -10965,10 +10972,8 @@ class Scheduler(PBSService):
         for name in tmpschd:
             if name != 'default':
                 self.server.schedulers[name].terminate()
-                sched_log = self.server.schedulers[name].attributes.get(
-                    'sched_log')
-                sched_priv = self.server.schedulers[name].attributes.get(
-                    'sched_priv')
+                sched_log = self.server.schedulers[name]['sched_log']
+                sched_priv = self.server.schedulers[name]['sched_priv']
                 self.du.rm(path=sched_log, recursive=True)
                 self.du.rm(path=sched_priv, recursive=True)
                 self.server.manager(MGR_CMD_DELETE, SCHED, id=name)
@@ -11001,6 +11006,7 @@ class Scheduler(PBSService):
         cmd = [os.path.join(self.pbs_conf['PBS_EXEC'], 'sbin', 'pbsfs'), '-e']
         self.du.run_cmd(cmd=cmd, sudo=True)
         self.parse_sched_config()
+        self.logger.info("--------scs------" + str(self.sched_config))
         if self.platform == 'cray' or self.platform == 'craysim':
             self.add_resource('vntype')
         self.fairshare_tree = None
@@ -13717,7 +13723,7 @@ class InteractiveJob(threading.Thread):
             self.job.interactive_handle = _p
             time.sleep(_st)
             expstr = "qsub: waiting for job "
-            expstr += "(?P<jobid>\d+.[0-9A-Za-z-]+) to start"
+            expstr += "(?P<jobid>\d+.[0-9A-Za-z-.]+) to start"
             _p.expect(expstr)
             if _p.match:
                 self.jobid = _p.match.group('jobid')
