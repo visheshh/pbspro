@@ -3934,7 +3934,7 @@ class PBSService(PBSObject):
                     if (isinstance(self, Scheduler) and
                             'sched_log' in self.attributes):
                         filename = os.path.join(
-                            self.attributes.get('sched_log'), day)
+                            self.attributes['sched_log'], day)
                     else:
                         logval = self._instance_to_logpath(logtype)
                         if logval:
@@ -10676,7 +10676,7 @@ class Scheduler(PBSService):
             self._config_order = []
         if 'sched_priv' in self.attributes:
             self.sched_config_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'sched_config')
         if schd_cnfg is None:
             if self.sched_config_file is not None:
@@ -10827,7 +10827,7 @@ class Scheduler(PBSService):
 
             if path is None:
                 if 'sched_priv' in self.attributes:
-                    sp = os.path.join(self.attributes.get('sched_priv'),
+                    sp = os.path.join(self.attributes['sched_priv'],
                                       'sched_config')
                 else:
                     sp = os.path.join(self.pbs_conf['PBS_HOME'],
@@ -10874,6 +10874,7 @@ class Scheduler(PBSService):
                          configuration settings.
         :type validate: bool
         """
+        self.parse_sched_config()
         self.logger.info(self.logprefix + "config " + str(confs))
         self.sched_config = dict(self.sched_config.items() + confs.items())
         if apply:
@@ -10965,10 +10966,10 @@ class Scheduler(PBSService):
         for name in tmpschd:
             if name != 'default':
                 self.server.schedulers[name].terminate()
-                sched_log = self.server.schedulers[name].attributes.get(
-                    'sched_log')
-                sched_priv = self.server.schedulers[name].attributes.get(
-                    'sched_priv')
+                sched_log = self.server.schedulers[
+                    name].attributes['sched_log']
+                sched_priv = self.server.schedulers[
+                    name].attributes['sched_priv']
                 self.du.rm(path=sched_log, recursive=True)
                 self.du.rm(path=sched_priv, recursive=True)
                 self.server.manager(MGR_CMD_DELETE, SCHED, id=name)
@@ -11016,8 +11017,8 @@ class Scheduler(PBSService):
         pbs_home = self.server.pbs_conf['PBS_HOME']
         if sched_home is None:
             sched_home = pbs_home
-        sched_priv_dir = 'sched_priv_' + self.attributes.get('id')
-        sched_logs_dir = 'sched_logs_' + self.attributes.get('id')
+        sched_priv_dir = 'sched_priv_' + self.attributes['id']
+        sched_logs_dir = 'sched_logs_' + self.attributes['id']
         if not os.path.exists(os.path.join(sched_home, sched_priv_dir)):
             self.du.run_copy(self.server.hostname,
                              os.path.join(pbs_home, 'sched_priv'),
@@ -11042,7 +11043,7 @@ class Scheduler(PBSService):
         conf = {}
         sconf = {MGR_OBJ_SCHED: conf}
         if 'sched_priv' in self.attributes:
-            sched_priv = self.attributes.get('sched_priv')
+            sched_priv = self.attributes['sched_priv']
         else:
             sched_priv = os.path.join(
                 self.pbs_conf['PBS_HOME'], 'sched_priv')
@@ -11157,7 +11158,7 @@ class Scheduler(PBSService):
         rc = None
         if 'sched_priv' in self.attributes:
             self.holidays_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'holidays')
         # Copy over the holidays file from PBS_EXEC if it exists
         if self.du.cmp(self.hostname, self.dflt_holidays_file,
@@ -11191,7 +11192,7 @@ class Scheduler(PBSService):
         days_set = obj.days_set
         if 'sched_priv' in self.attributes:
             self.holidays_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'holidays')
         if path is None:
             path = self.holidays_file
@@ -11705,7 +11706,7 @@ class Scheduler(PBSService):
 
         if 'sched_priv' in self.attributes:
             self.holidays_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'holidays')
         if out_path is None:
             out_path = self.holidays_file
@@ -12118,7 +12119,7 @@ class Scheduler(PBSService):
             hostname = self.hostname
         if 'sched_priv' in self.attributes:
             self.resource_group_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'resource_group')
         # if resource_group is None:
         resource_group = self.resource_group_file
@@ -12156,7 +12157,7 @@ class Scheduler(PBSService):
         """
         if 'sched_priv' in self.attributes:
             self.resource_group_file = os.path.join(
-                self.attributes.get('sched_priv'),
+                self.attributes['sched_priv'],
                 'resource_group')
         if self.resource_group is None:
             self.resource_group = self.parse_resource_group(
@@ -13717,7 +13718,7 @@ class InteractiveJob(threading.Thread):
             self.job.interactive_handle = _p
             time.sleep(_st)
             expstr = "qsub: waiting for job "
-            expstr += "(?P<jobid>\d+.[0-9A-Za-z-]+) to start"
+            expstr += "(?P<jobid>\d+.[0-9A-Za-z-.]+) to start"
             _p.expect(expstr)
             if _p.match:
                 self.jobid = _p.match.group('jobid')
