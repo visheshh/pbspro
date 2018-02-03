@@ -3696,10 +3696,7 @@ class PBSService(PBSObject):
         pid = None
 
         if inst is not None:
-            if inst.pid is not None:
-                pid = inst.pid
-            else:
-                pid = self._get_pid(inst)
+            pid = self._get_pid(inst)
 
         if procname is not None:
             pi = self.pu.get_proc_info(self.hostname, procname)
