@@ -679,9 +679,12 @@ class PBSTestSuite(unittest.TestCase):
                 continue
             else:
                 cls.schedulers[sched.server.name] = sched.server.schedulers
+        if cls.scheds:
+            cls.scheduler = cls.schedulers.values()[0]['default']
+
         # creating a short hand for current host server.schedulers
         cls.scheds = cls.server.schedulers
-        cls.scheduler = cls.scheds['default']
+
 
     @classmethod
     def init_moms(cls, init_mom_func=None, skip='nomom'):
