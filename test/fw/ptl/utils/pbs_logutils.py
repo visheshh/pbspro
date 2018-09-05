@@ -195,6 +195,8 @@ JID = 'job_id'
 JRR = 'job_run_rate'
 JSR = 'job_submit_rate'
 JER = 'job_end_rate'
+JTR = 'job_throughput'
+JDR = 'job_dequeue_rate'
 NJQ = 'num_jobs_queued'
 NJR = 'num_jobs_run'
 NJE = 'num_jobs_ended'
@@ -904,17 +906,21 @@ class PBSServerLog(PBSLogAnalyzer):
     server_nodeup_tag = re.compile(tm_re + ".*Node;.*;node up.*")
     server_enquejob_tag = re.compile(tm_re + ".*" + job_re +
                                      ".*enqueuing into.*state 1 .*")
+    server_dequejob_tag = re.compile((tm_re + ".*" + job_re +
+                                      ".*dequeuing from.*"))
     server_endjob_tag = re.compile(tm_re + ".*" + job_re +
                                    ".*;Exit_status.*")
 
     def __init__(self, filename=None, hostname=None, show_progress=False):
 
         self.server_job_queued = {}
+        self.server_job_dequeued = {}
         self.server_job_run = {}
         self.server_job_end = {}
         self.records = None
         self.nodeup = []
         self.enquejob = []
+        self.dequejob = []
         self.record_tm = []
         self.jobsrun = []
         self.jobsend = []
@@ -985,6 +991,17 @@ class PBSServerLog(PBSLogAnalyzer):
             jobid = str(m.group('jobid'))
             self.server_job_queued[jobid] = tm
 
+    def parse_dequejob(self, line):
+        """
+        Parse server log for dequed jobs
+        """
+        m = self.server_dequejob_tag.match(line)
+        if m:
+            tm = self.logutils.convert_date_time(m.group('datetime'))
+            self.dequejob.append(tm)
+            jobid = str(m.group('jobid'))
+            self.server_job_dequeued[jobid] = tm
+
     def comp_analyze(self, rec, start=None, end=None):
         m = self.tm_tag.match(rec)
         if m:
@@ -1003,16 +1020,21 @@ class PBSServerLog(PBSLogAnalyzer):
         self.parse_nodeup(rec)
         self.parse_runjob(rec)
         self.parse_endjob(rec)
+        self.parse_dequejob(rec)
 
         return PARSER_OK_CONTINUE
 
     def summary(self):
         self.info[JSR] = self.logutils.get_rate(self.enquejob)
+        self.info[JDR] = self.logutils.get_rate(self.dequejob)
         self.info[NJE] = len(self.server_job_end.keys())
         self.info[NJQ] = len(self.enquejob)
         self.info[NUR] = self.logutils.get_rate(self.nodeup)
         self.info[JRR] = self.logutils.get_rate(self.jobsrun)
         self.info[JER] = self.logutils.get_rate(self.jobsend)
+        if len(self.server_job_run) > 0:
+            tjr = self.dequejob[-1] - self.enquejob[0]
+            self.info[JTR] = str(len(self.server_job_run) / tjr) + '/s'
         if len(self.wait_time) > 0:
             wt = sorted(self.wait_time)
             wta = float(sum(self.wait_time)) / len(self.wait_time)
