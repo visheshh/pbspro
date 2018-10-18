@@ -6413,7 +6413,7 @@ finish_loop(time_t waittime)
 
 		if (exiting_tasks)
 			scan_for_exiting();
-		wait_request(1);
+		wait_request(1, -1);
 	}
 #else
 	if (do_debug_report)
@@ -6432,7 +6432,7 @@ finish_loop(time_t waittime)
 	DBPRT(("%s: waittime %lu\n", __func__, (unsigned long) waittime))
 
 	/* wait for a request to process */
-	if (wait_request(waittime) != 0)
+	if (wait_request(waittime, -1) != 0)
 		log_err(-1, msg_daemonname, "wait_request failed");
 
 #endif	/* WIN32 */

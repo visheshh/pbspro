@@ -2141,10 +2141,14 @@ try_db_again:
 			reap_child();
 #endif	/* WIN32 */
 
-		/* wait for a request and process it */
-		if (wait_request(waittime) != 0) {
-			log_err(-1, msg_daemonname, "wait_requst failed");
-		}
+                psched = (pbs_sched *) GET_NEXT(svr_allscheds);
+                while (psched != NULL) {
+                	if (wait_request(waittime,psched->scheduler_sock) != 0) {
+                        log_err(-1, msg_daemonname, "wait_requst failed");
+			}
+                psched = (pbs_sched *) GET_NEXT(psched->sc_link);
+                }
+
 #ifdef WIN32
 		connection_idlecheck();
 #else
