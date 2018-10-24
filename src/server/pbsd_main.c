@@ -2140,15 +2140,31 @@ try_db_again:
 		if (reap_child_flag)
 			reap_child();
 #endif	/* WIN32 */
-
-                psched = (pbs_sched *) GET_NEXT(svr_allscheds);
-                while (psched != NULL) {
-                	if (wait_request(waittime,psched->scheduler_sock) != 0) {
-                        log_err(-1, msg_daemonname, "wait_requst failed");
+                int *socket_fd;
+                int i=0,k=0;
+                //count the number of active schedulers
+                for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+                        if (psched->scheduler_sock!=-1)
+			{
+                		k=k+1;
+			
 			}
-                psched = (pbs_sched *) GET_NEXT(psched->sc_link);
                 }
 
+                socket_fd = (int *)calloc(k, sizeof(int));
+                //assign the active sockets to socket_fd
+		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+                        if (psched->scheduler_sock!=-1)
+                        {
+				*(socket_fd+i)=psched->scheduler_sock;
+				i=i+1;
+			}
+		}
+                if (wait_request(waittime,socket_fd,k) != 0) {
+                        log_err(-1, msg_daemonname, "wait_requst failed");
+                }
+               	free(socket_fd); 
+		
 #ifdef WIN32
 		connection_idlecheck();
 #else

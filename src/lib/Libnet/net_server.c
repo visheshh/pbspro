@@ -529,7 +529,7 @@ process_socket(int sock)
  *
  */
 int
-wait_request(time_t waittime, int socket_fd)
+wait_request(time_t waittime, int *socket_fd, int num_socks)
 {
 	int nfds;
 	int idx;
@@ -559,18 +559,25 @@ wait_request(time_t waittime, int socket_fd)
 			return (-1);
 		}
 	} else {
-		if (socket_fd != -1) {
+		if (num_socks) {
 			fd_set		fdset;
 			struct timeval  timeout;
 			timeout.tv_usec = 0;
 			timeout.tv_sec = 0;
-
 			FD_ZERO(&fdset);
-			FD_SET(socket_fd, &fdset);
-			if ((select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) && (FD_ISSET(socket_fd, &fdset))) {
-				log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
-					LOG_DEBUG, __func__, "processing priority sockets");
-				return process_socket(socket_fd);
+                        for (i = 0; i < num_socks; i++){
+                                if (*(socket_fd+i)!=0){
+					FD_SET(*(socket_fd+i), &fdset);
+				}
+			}
+			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1){
+				 for (i=0;i<num_socks;i++){
+				 	if (FD_ISSET(*(socket_fd+i), &fdset)) {
+						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
+							LOG_DEBUG, __func__, "processing priority sockets");
+						return process_socket(*(socket_fd+i));
+					}
+				}
 			}
                 }
 
