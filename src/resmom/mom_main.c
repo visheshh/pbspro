@@ -267,6 +267,7 @@ extern time_t		time_now;
 time_t		time_resc_updated = 0;
 extern pbs_list_head svr_requests;
 extern struct var_table vtable;	/* see start_exec.c */
+struct sched_socks ss;
 #if	MOM_ALPS
 #define	ALPS_REL_WAIT_TIME_DFLT		400000;	/* 0.4 sec */
 #define	ALPS_REL_JITTER_DFLT		120000;	/* 0.12 sec */
@@ -2578,7 +2579,7 @@ do_mom_action_script(int	ae,	/* index into action table */
 #ifdef	WIN32
 	char		buf[MAX_PATH + 1];
 #else
-	char		buf[MAXPATHLEN + 1];
+	char		buf[_POSIX_PATH_MAX + 1];
 #endif
 	int		i;
 	int		nargs;
@@ -6413,7 +6414,7 @@ finish_loop(time_t waittime)
 
 		if (exiting_tasks)
 			scan_for_exiting();
-		wait_request(1);
+		wait_request(1, ss);
 	}
 #else
 	if (do_debug_report)
@@ -6432,7 +6433,7 @@ finish_loop(time_t waittime)
 	DBPRT(("%s: waittime %lu\n", __func__, (unsigned long) waittime))
 
 	/* wait for a request to process */
-	if (wait_request(waittime) != 0)
+	if (wait_request(waittime, ss) != 0)
 		log_err(-1, msg_daemonname, "wait_request failed");
 
 #endif	/* WIN32 */
@@ -8431,20 +8432,19 @@ main(int argc, char *argv[])
 				rlimit.rlim_cur = MIN_STACK_LIMIT;
 				rlimit.rlim_max = MIN_STACK_LIMIT;
 				if (setrlimit64(RLIMIT_STACK, &rlimit) == -1) {
-					char msgbuf[] = "Stack limit setting failed";
 					curerror = errno;
-					log_err(curerror, __func__, msgbuf);
-					sprintf(log_buffer, "%s errno=%d", msgbuf, curerror);
+					sprintf(log_buffer, "Stack limit setting failed");
+					log_err(curerror, __func__, log_buffer);
+					sprintf(log_buffer, "%s errno=%d", log_buffer, curerror);
 					log_record(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, LOG_ERR, (char *)__func__, log_buffer);
 					exit(1);
 				}
 			}
 		} else {
-			char msgbuf[] = "Getting current Stack limit failed";
-
 			curerror = errno;
-			log_err(curerror, __func__, msgbuf);
-			snprintf(log_buffer, sizeof(log_buffer), "%s errno=%d", msgbuf, curerror);
+			sprintf(log_buffer, "Getting current Stack limit failed");
+			log_err(curerror, __func__, log_buffer);
+			sprintf(log_buffer, "%s errno=%d", log_buffer, curerror);
 			log_record(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, LOG_ERR, (char *)__func__, log_buffer);
 			exit(1);
 		}
@@ -10496,16 +10496,18 @@ getkbdtime(void)
 {
 	DIR	*dp;
 	struct	dirent	*de;
-	static char	idle_dir[MAXPATHLEN + 1] = {'\0'};
-	char	*idle_file = NULL;
+	static char	idle_dir[256];
+	char	idle_file[256];
 	struct input_dev_list *pl = &input_dev_list[0];
 	int     i;
 	int     checked = 0;
 	char	*ptsname;
 
+
+
 	/* since we call this function so often, only want to set this once */
 	if (idle_dir[0] == '\0')
-		snprintf(idle_dir, sizeof(idle_dir), "%s/spool/idledir", pbs_conf.pbs_home_path);
+		sprintf(idle_dir, "%s/spool/idledir", pbs_conf.pbs_home_path);
 
 	if (check_idle_daemon) {
 		if ((dp=opendir(idle_dir)) != NULL) {
@@ -10516,10 +10518,9 @@ getkbdtime(void)
 					break;
 				if (*ptsname == '.')
 					continue;
-				pbs_asprintf(&idle_file, "%s/%s", idle_dir, ptsname);
+				sprintf(idle_file, "%s/%s", idle_dir, ptsname);
 				if (setmax(idle_file) > 0)
 					checked = 1;
-				free(idle_file);
 			}
 			closedir(dp);
 		}

@@ -485,6 +485,7 @@ do_rpp(int stream)
 void
 rpp_request(int fd)
 {
+	int	stream;
 	int	iloop;
 	int	rpp_max_pkt_check = RPP_MAX_PKT_CHECK_DEFAULT;
 
@@ -499,8 +500,6 @@ rpp_request(int fd)
 		rpp_max_pkt_check = server.sv_attr[(int) SRV_ATR_rpp_max_pkt_check].at_val.at_long;
 
 	for (iloop = 0; iloop < rpp_max_pkt_check; iloop++) {
-		int	stream;
-
 		if ((stream = rpp_poll()) == -1) {
 #ifdef WIN32
 			/* workaround to a win2k winsock bug */
@@ -575,6 +574,7 @@ void
 pbs_close_stdfiles(void)
 {
 	static int already_done = 0;
+	FILE *dummyfile;
 #ifdef WIN32
 #define NULL_DEVICE "nul"
 #else
@@ -582,8 +582,6 @@ pbs_close_stdfiles(void)
 #endif
 
 	if (!already_done) {
-		FILE *dummyfile;
-
 		(void)fclose(stdin);
 		(void)fclose(stdout);
 		(void)fclose(stderr);
@@ -1542,10 +1540,10 @@ try_db_again:
 		fprintf(stderr, ".");
 #endif
 		try_connect_database(conn);
-		if (conn && (conn->conn_state == PBS_DB_CONNECT_STATE_CONNECTED))
+		if (conn->conn_state == PBS_DB_CONNECT_STATE_CONNECTED)
 			break;
 
-		if (conn && (conn->conn_db_state == PBS_DB_DOWN)) {
+		if (conn && conn->conn_db_state == PBS_DB_DOWN) {
 			/* db start failed, reset everything, so we try all over again */
 			pbs_db_disconnect(conn);
 			pbs_db_destroy_connection(conn);
@@ -1721,7 +1719,7 @@ try_db_again:
 
 	if ((sock = init_network(pbs_server_port_dis)) < 0) {
 		(void) sprintf(log_buffer,
-			"init_network failed using ports Server:%u Scheduler:%u MOM:%u RM:%u",
+			"init_network failed using ports Server:%d Scheduler:%d MOM:%d RM:%d",
 			pbs_server_port_dis, pbs_scheduler_port, pbs_mom_port, pbs_rm_port);
 		log_event(PBSEVENT_SYSTEM | PBSEVENT_ADMIN, PBS_EVENTCLASS_SERVER,
 			LOG_ERR, msg_daemonname, log_buffer);
@@ -1983,8 +1981,7 @@ try_db_again:
 	/* save it so we can free it without needing the pointer inside svr_interp_data */
 	keep_daemon_name = svr_interp_data.daemon_name;
 
-	snprintf(svr_interp_data.local_host_name, sizeof(svr_interp_data.local_host_name),
-		"%s", server_host);
+	strncpy(svr_interp_data.local_host_name, server_host, (sizeof(svr_interp_data.local_host_name) - 1));
 	if ((pc=strchr(svr_interp_data.local_host_name, '.')) != NULL)
 		*pc = '\0';
 
@@ -2144,10 +2141,32 @@ try_db_again:
 			reap_child();
 #endif	/* WIN32 */
 
-		/* wait for a request and process it */
-		if (wait_request(waittime) != 0) {
-			log_err(-1, msg_daemonname, "wait_requst failed");
+                struct sched_socks ss;
+                int i=0;
+                ss.active_socks=0;
+                //count the number of active schedulers
+      		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+                        if (psched->scheduler_sock!=-1)
+			{
+                		ss.active_socks=ss.active_socks+1;
+			
+			}
+           	}
+
+		ss.socket_fd = (int *)calloc(ss.active_socks, sizeof(int));
+		//assign the active sockets to socket_fd
+		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+                        if (psched->scheduler_sock!=-1)
+                        {
+				*(ss.socket_fd+i)=psched->scheduler_sock;
+				i=i+1;
+			}
 		}
+                if (wait_request(waittime, ss) != 0) {
+                        log_err(-1, msg_daemonname, "wait_requst failed");
+                }
+               	free(ss.socket_fd); 
+		
 #ifdef WIN32
 		connection_idlecheck();
 #else
@@ -2343,13 +2362,13 @@ try_db_again:
 static int
 get_port(char *arg, unsigned int *port, pbs_net_t *addr)
 {
+	char *name;
+
 	if (*arg == ':')
 		++arg;
 	if (isdigit((int)*arg)) {	/* port only specified */
 		*port = (unsigned int)atoi(arg);
 	} else {
-		char *name;
-
 		name = parse_servername(arg, port);
 		if (name) {
 			*addr = get_hostaddr(name);
@@ -2357,7 +2376,7 @@ get_port(char *arg, unsigned int *port, pbs_net_t *addr)
 			return (-1);
 		}
 	}
-	if ((*port == 0) || (*addr == 0))
+	if ((*port <= 0) || (*addr == 0))
 		return (-1);
 	return 0;
 }
@@ -2641,13 +2660,12 @@ main(int argc, char *argv[])
 			{ 0, 0 } };
 
 		if (getenv("PBS_CONF_FILE") == NULL) {
+			char conf_path[80];
 			char *p;
+			char psave;
+			struct stat sbuf;
 
 			if (p = strstr(argv[0], "exec")) {
-				struct stat sbuf;
-				char psave;
-				char conf_path[80];
-
 				psave = *p;
 				*p = '\0';
 				_snprintf(conf_path, 79, "%spbs.conf", argv[0]);
@@ -2971,10 +2989,8 @@ start_db()
 static void
 try_connect_database(pbs_db_conn_t *conn)
 {
+	int i;
 	int failcode = 0;
-
-	if (conn == NULL)
-		return;
 
 	if (conn->conn_state == PBS_DB_CONNECT_STATE_CONNECTED)
 		return; /* already connected */
@@ -3007,8 +3023,6 @@ try_connect_database(pbs_db_conn_t *conn)
 			}
 		}
 		if (conn->conn_db_state == PBS_DB_STARTED || conn->conn_db_state == PBS_DB_STARTING) {
-			int i;
-
 			i = MAX_DB_RETRIES;
 			/*
 			 * call pbs_db_connect_async a few times in a tight loop
@@ -3047,6 +3061,7 @@ void
 stop_db()
 {
 	char *db_err = NULL;
+	int rc = 0;
 
 	pbs_db_disconnect(svr_db_conn);
 	pbs_db_destroy_connection(svr_db_conn);
@@ -3055,8 +3070,6 @@ stop_db()
 	/* check status of db, shutdown if up */
 	db_oper_failed_times = 0;
 	while (1) {
-		int rc;
-
 		rc = pbs_status_db(&db_err);
 		if (rc != 0) {
 			free(db_err);
@@ -3136,7 +3149,7 @@ setup_db_connection(char *host, int timeout, int have_db_control)
 {
 	int failcode = 0;
 	char errmsg[PBS_MAX_DB_CONN_INIT_ERR + 1] = {0};
-	pbs_db_conn_t *lconn;
+	pbs_db_conn_t *lconn = NULL;
 
 	lconn = pbs_db_init_connection(host, timeout, have_db_control, &failcode, errmsg, PBS_MAX_DB_CONN_INIT_ERR);
 	if (!lconn) {

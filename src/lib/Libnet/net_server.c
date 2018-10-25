@@ -89,9 +89,9 @@
 static conn_t **svr_conn;    /* list of pointers to connections indexed by the socket fd. List is dynamically allocated */
 #define CONNS_ARRAY_INCREMENT	100 /* Increases this many more connection pointers when dynamically allocating memory for svr_conn */
 static int conns_array_size = 0;  /* Size of the svr_conn list, initialized to 0 */
-
+pbs_sched               *psched;
 pbs_list_head svr_allconns; /* head of the linked list of active connections */
-
+pbs_list_head   svr_allscheds;
 /*
  * The following data is private to this set of network interface routines.
  */
@@ -439,10 +439,9 @@ connection_idlecheck(void)
 static int
 engage_authentication(conn_t *pconn)
 {
-	int ret;
-	int sd;
-	char ebuf[PBS_MAXHOSTNAME + 1] = {'\0'};
-	char *msgbuf;
+	int	ret;
+	int	sd;
+	char ebuf[ PBS_MAXHOSTNAME + 1 ];
 
 	if (pconn == NULL || (sd = pconn->cn_sock) <0) {
 		log_err(-1, __func__, "bad arguments, unable to authenticate");
@@ -463,14 +462,46 @@ engage_authentication(conn_t *pconn)
 
 	(void)get_connecthost(sd, ebuf, sizeof(ebuf));
 
-	pbs_asprintf(&msgbuf,
-		"unable to authenticate connection from (%s:%d)",
+	sprintf(logbuf,	"unable to authenticate connection from (%s:%d)",
 		ebuf, pconn->cn_port);
-	log_err(-1, __func__ , msgbuf);
-	free(msgbuf);
+	log_err(-1, __func__ , logbuf);
 
 	return (-1);
 }
+
+/*
+ * @brief
+ * process_socket  -  The static method processes given socket and
+ *                    engages the appropriate connection authentication.
+ *
+ * @param[in]   sock 	- socket fd to process
+ *
+ * @retval	 0 for success
+ * @retval	-1 for failure
+ *
+ */
+static int
+process_socket(int sock)
+{
+	int idx = connection_find_actual_index(sock);
+	if (idx < 0) {
+		return -1;
+	}
+	svr_conn[idx]->cn_lasttime = time((time_t *) 0);
+	if ((svr_conn[idx]->cn_active != Primary) &&
+		(svr_conn[idx]->cn_active != RppComm) &&
+		(svr_conn[idx]->cn_active != Secondary)) {
+		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+			if (engage_authentication(svr_conn[idx]) == -1) {
+				close_conn(sock);
+				return -1;
+			}
+		}
+	}
+	svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+	return 0;
+}
+
 
 /**
  * @brief
@@ -485,7 +516,8 @@ engage_authentication(conn_t *pconn)
  *	routine associated with the socket is invoked.
  *
  * @param[in] waittime - Timeout for tpp_em_wait (poll)
- *
+ * @param[in] socket_fd - if socket fd > -1 then this method processes only
+ *                        that socket fd, other wise processes all the sockets
  * @return Error code
  * @retval 0 - Success
  * @retval -1 - Failure
@@ -497,7 +529,7 @@ engage_authentication(conn_t *pconn)
  *
  */
 int
-wait_request(time_t waittime)
+wait_request(time_t waittime, struct sched_socks scks)
 {
 	int nfds;
 	int idx;
@@ -520,7 +552,6 @@ wait_request(time_t waittime)
 	nfds = tpp_em_wait(poll_context, &events, timeout);
 	err = errno;
 #endif /* WIN32 */
-
 	if (nfds < 0) {
 		if (!(err == EINTR || err == EAGAIN || err == 0)) {
 			snprintf(logbuf, sizeof(logbuf), " tpp_em_wait() error, errno=%d", err);
@@ -528,6 +559,28 @@ wait_request(time_t waittime)
 			return (-1);
 		}
 	} else {
+		if (scks.active_socks > 0) {
+			fd_set		fdset;
+			struct timeval  timeout;
+			timeout.tv_usec = 0;
+			timeout.tv_sec = 0;
+			FD_ZERO(&fdset);
+                        for (i = 0; i < scks.active_socks; i++){
+                                if (*(scks.socket_fd+i)!=0){
+					FD_SET(*(scks.socket_fd+i), &fdset);
+				}
+			}
+			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1){
+				 for (i=0;i<scks.active_socks;i++){
+				 	if (FD_ISSET(*(scks.socket_fd+i), &fdset)) {
+						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
+							LOG_DEBUG, __func__, "processing priority sockets");
+						return process_socket(*(scks.socket_fd+i));
+					}
+				}
+			}
+                }
+
 		for (i = 0; i < nfds; i++) {
 			int em_fd;
 			em_fd = EM_GET_FD(events, i);
@@ -549,26 +602,7 @@ wait_request(time_t waittime)
 				}
 			}
 #endif
-			idx = connection_find_actual_index(em_fd);
-			if (idx < 0) {
-				return -1;
-			}
-
-			svr_conn[idx]->cn_lasttime = time(NULL);
-
-			if (svr_conn[idx]->cn_active != Primary && svr_conn[idx]->cn_active != RppComm && svr_conn[idx]->cn_active
-					!= Secondary) {
-
-				if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
-
-					if (engage_authentication(svr_conn[idx]) == -1) {
-						close_conn(em_fd);
-						continue;
-					}
-				}
-			}
-
-			svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+			process_socket(em_fd);
 		}
 	}
 
@@ -796,15 +830,15 @@ close_conn(int sd)
 
 	if (svr_conn[idx]->cn_active != ChildPipe) {
 		if (CS_close_socket(sd) != CS_SUCCESS) {
-			char ebuf[PBS_MAXHOSTNAME + 1] = {'\0'};
-			char *msgbuf;
+
+			char ebuf[ PBS_MAXHOSTNAME + 1 ] = {'\0'};
 
 			(void)get_connecthost(sd, ebuf, sizeof(ebuf));
-			pbs_asprintf(&msgbuf,
+			snprintf(logbuf,sizeof(logbuf),
 				"problem closing security context for %s:%d",
 				ebuf, svr_conn[idx]->cn_port);
-			log_err(-1, __func__ , msgbuf);
-			free(msgbuf);
+
+			log_err(-1, __func__ , logbuf);
 		}
 
 		/* if there is a function to call on close, do it */
