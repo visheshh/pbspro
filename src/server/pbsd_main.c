@@ -310,6 +310,7 @@ time_t		time_now;
 struct batch_request	*saved_takeover_req=NULL;
 struct python_interpreter_data  svr_interp_data;
 int svr_unsent_qrun_req = 0;	/* Set to 1 for scheduling unsent qrun requests */
+priority_socks *scks;
 
 AVL_IX_DESC *AVL_jctx = NULL;
 
@@ -843,6 +844,7 @@ main(int argc, char **argv)
 	int			are_primary;
 	int			c, rc;
 	int			i;
+	int			act_scks;
 	int			rppfd;		/* fd to receive is HELLO's */
 	int			privfd;		/* fd to send is messages */
 	uint			tryport;
@@ -2059,7 +2061,6 @@ try_db_again:
 				if (psched->sch_attr[SCHED_ATR_scheduling].at_val.at_long &&
 					psched->svr_do_sched_high != SCH_SCHEDULE_NULL)
 					schedule_high(psched);
-
 				if (psched->svr_do_schedule == SCH_SCHEDULE_RESTART_CYCLE) {
 
 					/* send only to existing connection */
@@ -2069,6 +2070,7 @@ try_db_again:
 					/* connect must have been setup to be valid */
 					if ((psched->scheduler_sock2 != -1) &&
 						(psched->scheduler_sock != -1)) {
+
 						if (put_sched_cmd(psched->scheduler_sock2,
 								psched->svr_do_schedule, NULL) == 0) {
 							sprintf(log_buffer, "sent scheduler restart scheduling cycle request to %s", psched->sc_name);
@@ -2142,11 +2144,37 @@ try_db_again:
 		if (reap_child_flag)
 			reap_child();
 #endif	/* WIN32 */
-
+		scks = (priority_socks *)malloc(sizeof(priority_socks));
+                if (!scks){
+                        log_err(-1, msg_daemonname, "priority_socks memory allocation failed");
+                        return -1;
+                }		
+		scks->active_socks = 0;
+		act_scks = 0;
+		/* count the number of active schedulers */
+		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+			if (psched->scheduler_sock != -1) {
+				scks->active_socks = scks->active_socks + 1;
+			}
+		}
+		scks->socket_fd = (int *)calloc(scks->active_socks, sizeof(int));
+		if (!scks->socket_fd){
+			log_err(-1, msg_daemonname, "socket_fd memory allocation failed");
+			return -1;
+		}
+		/* assign the active sockets to socket_fd */
+		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
+			if (psched->scheduler_sock != -1) {
+				scks->socket_fd[act_scks]=psched->scheduler_sock;
+				act_scks = act_scks + 1;
+			}
+		}
 		/* wait for a request and process it */
-		if (wait_request(waittime) != 0) {
+		if (wait_request(waittime, scks) != 0) {
 			log_err(-1, msg_daemonname, "wait_requst failed");
 		}
+		free(scks->socket_fd); 
+		free(scks);
 #ifdef WIN32
 		connection_idlecheck();
 #else
