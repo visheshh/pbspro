@@ -267,6 +267,7 @@ extern time_t		time_now;
 time_t		time_resc_updated = 0;
 extern pbs_list_head svr_requests;
 extern struct var_table vtable;	/* see start_exec.c */
+struct sched_socks scks = {0};
 #if	MOM_ALPS
 #define	ALPS_REL_WAIT_TIME_DFLT		400000;	/* 0.4 sec */
 #define	ALPS_REL_JITTER_DFLT		120000;	/* 0.12 sec */
@@ -6143,20 +6144,21 @@ do_rpp(int stream)
 
 /**
  * @brief
- *	wrapper function for do_rpp which calls infinitely
+ *	wrapper function for do_rpp
  *
  * @param[in] fd - file descriptor
  *
  * @return Void
  *
  */
-
+#define MAX_RPP_LOOPS 3
 void
 rpp_request(int fd)
 {
 	int	stream;
+	int	i;
 
-	for (;;) {
+	for (i=0 ; i < MAX_RPP_LOOPS ; i++) {
 		if ((stream = rpp_poll()) == -1) {
 #ifdef	WIN32
 			if (errno != 10054)
@@ -6413,7 +6415,7 @@ finish_loop(time_t waittime)
 
 		if (exiting_tasks)
 			scan_for_exiting();
-		wait_request(1);
+		wait_request(1, scks);
 	}
 #else
 	if (do_debug_report)
@@ -6432,7 +6434,7 @@ finish_loop(time_t waittime)
 	DBPRT(("%s: waittime %lu\n", __func__, (unsigned long) waittime))
 
 	/* wait for a request to process */
-	if (wait_request(waittime) != 0)
+	if (wait_request(waittime, scks) != 0)
 		log_err(-1, msg_daemonname, "wait_request failed");
 
 #endif	/* WIN32 */

@@ -89,7 +89,8 @@
 static conn_t **svr_conn;    /* list of pointers to connections indexed by the socket fd. List is dynamically allocated */
 #define CONNS_ARRAY_INCREMENT	100 /* Increases this many more connection pointers when dynamically allocating memory for svr_conn */
 static int conns_array_size = 0;  /* Size of the svr_conn list, initialized to 0 */
-
+pbs_sched	*psched;
+pbs_list_head	svr_allscheds;
 pbs_list_head svr_allconns; /* head of the linked list of active connections */
 
 /*
@@ -472,6 +473,39 @@ engage_authentication(conn_t *pconn)
 	return (-1);
 }
 
+/*
+ * @brief
+ * process_socket  -  The static method processes given socket and
+ *                    engages the appropriate connection authentication.
+ *
+ * @param[in]   sock 	- socket fd to process
+ *
+ * @retval	-1 for failure
+ * @retval	0  for success
+ *
+ */
+static int
+process_socket(int sock)
+{
+	int idx = connection_find_actual_index(sock);
+	if (idx < 0) {
+		return -1;
+	}
+	svr_conn[idx]->cn_lasttime = time(NULL);
+	if ((svr_conn[idx]->cn_active != Primary) &&
+		(svr_conn[idx]->cn_active != RppComm) &&
+		(svr_conn[idx]->cn_active != Secondary)) {
+		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+			if (engage_authentication(svr_conn[idx]) == -1) {
+				close_conn(sock);
+				return -1;
+			}
+		}
+	}
+	svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+	return 0;
+}
+
 /**
  * @brief
  *	Waits for events on a set of sockets and calls processing function
@@ -485,6 +519,7 @@ engage_authentication(conn_t *pconn)
  *	routine associated with the socket is invoked.
  *
  * @param[in] waittime - Timeout for tpp_em_wait (poll)
+ * @param[in] sched_socks - structure contains active schedulers fd and count
  *
  * @return Error code
  * @retval 0 - Success
@@ -497,10 +532,9 @@ engage_authentication(conn_t *pconn)
  *
  */
 int
-wait_request(time_t waittime)
+wait_request(time_t waittime, struct sched_socks scks)
 {
 	int nfds;
-	int idx;
 	em_event_t *events;
 	int err,i;
 	int timeout = (int) (waittime * 1000); /* milli seconds */
@@ -528,6 +562,28 @@ wait_request(time_t waittime)
 			return (-1);
 		}
 	} else {
+		if (scks.active_socks) {
+			fd_set		fdset;
+			struct timeval  timeout;
+			timeout.tv_usec = 0;
+			timeout.tv_sec = 0;
+			FD_ZERO(&fdset);
+                        for (i = 0; i < scks.active_socks; i++) {
+                                if (*(scks.socket_fd+i) != 0) {
+					FD_SET(*(scks.socket_fd+i), &fdset);
+				}
+			}
+			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) {
+				 for (i = 0; i < scks.active_socks; i++) {
+				 	if (FD_ISSET(*(scks.socket_fd+i), &fdset)) {
+						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
+							LOG_DEBUG, __func__, "processing priority sockets");
+						return process_socket(*(scks.socket_fd+i));
+					}
+				}
+			}
+                }
+
 		for (i = 0; i < nfds; i++) {
 			int em_fd;
 			em_fd = EM_GET_FD(events, i);
@@ -549,26 +605,7 @@ wait_request(time_t waittime)
 				}
 			}
 #endif
-			idx = connection_find_actual_index(em_fd);
-			if (idx < 0) {
-				return -1;
-			}
-
-			svr_conn[idx]->cn_lasttime = time(NULL);
-
-			if (svr_conn[idx]->cn_active != Primary && svr_conn[idx]->cn_active != RppComm && svr_conn[idx]->cn_active
-					!= Secondary) {
-
-				if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
-
-					if (engage_authentication(svr_conn[idx]) == -1) {
-						close_conn(em_fd);
-						continue;
-					}
-				}
-			}
-
-			svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+			process_socket(em_fd);
 		}
 	}
 

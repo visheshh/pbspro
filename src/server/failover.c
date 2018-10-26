@@ -119,6 +119,7 @@ extern char	     server_host[];
 
 extern struct connection *svr_conn;
 extern struct batch_request *saved_takeover_req;
+struct sched_socks scks = {0};
 
 int	     pbs_failover_active = 0; /* indicates if Seconary is active */
 /* Private data items */
@@ -542,7 +543,7 @@ req_failover(struct batch_request *preq)
 			 * wait for Primary to actually shut down
 			 * (connection closes)
 			 */
-			(void)wait_request(600);
+			(void)wait_request(600, scks);
 			if (sec_sock != -1) {
 				close_conn(sec_sock);
 				sec_sock = -1;
@@ -997,7 +998,7 @@ takeover_from_secondary()
 		exit(1);
 	}
 	goidle_ack = 1;
-	(void)wait_request(600);
+	(void)wait_request(600, scks);
 #ifdef WIN32
 	connection_idlecheck();
 #endif
@@ -1290,7 +1291,7 @@ be_secondary(time_t delay)
 				 * first wait for Primary to close connection indicating
 				 * that it is going down, then wait a safety few more seconds
 				 */
-				(void)wait_request(600);
+				(void)wait_request(600, scks);
 				sleep(10);
 				log_event(PBSEVENT_DEBUG, LOG_DEBUG, PBS_EVENTCLASS_SERVER,
 					msg_daemonname,
@@ -1303,7 +1304,7 @@ be_secondary(time_t delay)
 				break;
 		}
 
-		if (wait_request(1) == -1) {
+		if (wait_request(1, scks) == -1) {
 			Secondary_state = SECONDARY_STATE_noconn;
 			close_conn(sec_sock);
 			sec_sock = -1;
