@@ -89,8 +89,6 @@
 static conn_t **svr_conn;    /* list of pointers to connections indexed by the socket fd. List is dynamically allocated */
 #define CONNS_ARRAY_INCREMENT	100 /* Increases this many more connection pointers when dynamically allocating memory for svr_conn */
 static int conns_array_size = 0;  /* Size of the svr_conn list, initialized to 0 */
-pbs_sched	*psched;
-pbs_list_head	svr_allscheds;
 pbs_list_head svr_allconns; /* head of the linked list of active connections */
 
 /*
@@ -519,7 +517,7 @@ process_socket(int sock)
  *	routine associated with the socket is invoked.
  *
  * @param[in] waittime - Timeout for tpp_em_wait (poll)
- * @param[in] sched_socks - structure contains active schedulers fd and count
+ * @param[in] scks - structure contains active fds and count
  *
  * @return Error code
  * @retval 0 - Success
@@ -532,7 +530,7 @@ process_socket(int sock)
  *
  */
 int
-wait_request(time_t waittime, struct sched_socks scks)
+wait_request(time_t waittime, struct priority_socks *scks)
 {
 	int nfds;
 	em_event_t *events;
@@ -562,23 +560,23 @@ wait_request(time_t waittime, struct sched_socks scks)
 			return (-1);
 		}
 	} else {
-		if (scks.active_socks) {
+		if (scks) {
 			fd_set		fdset;
 			struct timeval  timeout;
 			timeout.tv_usec = 0;
 			timeout.tv_sec = 0;
 			FD_ZERO(&fdset);
-                        for (i = 0; i < scks.active_socks; i++) {
-                                if (*(scks.socket_fd+i) != 0) {
-					FD_SET(*(scks.socket_fd+i), &fdset);
+                        for (i = 0; i < scks->active_socks; i++) {
+                                if (scks->socket_fd[i] != 0) {
+					FD_SET(scks->socket_fd[i], &fdset);
 				}
 			}
 			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) {
-				 for (i = 0; i < scks.active_socks; i++) {
-				 	if (FD_ISSET(*(scks.socket_fd+i), &fdset)) {
+				 for (i = 0; i < scks->active_socks; i++) {
+				 	if (FD_ISSET(scks->socket_fd[i], &fdset)) {
 						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 							LOG_DEBUG, __func__, "processing priority sockets");
-						return process_socket(*(scks.socket_fd+i));
+						return process_socket(scks->socket_fd[i]);
 					}
 				}
 			}
@@ -605,7 +603,9 @@ wait_request(time_t waittime, struct sched_socks scks)
 				}
 			}
 #endif
-			process_socket(em_fd);
+			if (process_socket(em_fd) == -1) {
+				return -1;
+			}
 		}
 	}
 
