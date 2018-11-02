@@ -309,7 +309,7 @@ time_t		time_now;
 struct batch_request	*saved_takeover_req=NULL;
 struct python_interpreter_data  svr_interp_data;
 int svr_unsent_qrun_req = 0;	/* Set to 1 for scheduling unsent qrun requests */
-struct sched_socks scks;
+struct priority_socks *scks;
 
 long		  svr_history_enable = 0; /*disable by default*/
 long		  svr_history_duration = SVR_JOBHIST_DEFAULT; /* default 2 weeks */
@@ -2145,19 +2145,28 @@ try_db_again:
 		if (reap_child_flag)
 			reap_child();
 #endif	/* WIN32 */
-		scks.active_socks = 0;
+		scks = (struct priority_socks *)malloc(sizeof(struct priority_socks));
+                if (!scks){
+                        log_err(-1, msg_daemonname, "priority_socks memory allocation failed");
+                        return -1;
+                }		
+		scks->active_socks = 0;
 		act_scks = 0;
 		/* count the number of active schedulers */
 		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
 			if (psched->scheduler_sock != -1) {
-				scks.active_socks = scks.active_socks + 1;
+				scks->active_socks = scks->active_socks + 1;
 			}
 		}
-		scks.socket_fd = (int *)calloc(scks.active_socks, sizeof(int));
+		scks->socket_fd = (int *)calloc(scks->active_socks, sizeof(int));
+		if (!scks->socket_fd){
+			log_err(-1, msg_daemonname, "socket_fd memory allocation failed");
+			return -1;
+		}
 		/* assign the active sockets to socket_fd */
 		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
 			if (psched->scheduler_sock != -1) {
-				*(scks.socket_fd+act_scks)=psched->scheduler_sock;
+				scks->socket_fd[act_scks]=psched->scheduler_sock;
 				act_scks = act_scks + 1;
 			}
 		}
@@ -2165,8 +2174,8 @@ try_db_again:
 		if (wait_request(waittime, scks) != 0) {
 			log_err(-1, msg_daemonname, "wait_requst failed");
 		}
-		free(scks.socket_fd); 
-
+		free(scks->socket_fd); 
+		free(scks);
 #ifdef WIN32
 		connection_idlecheck();
 #else

@@ -2019,12 +2019,3 @@ class TestMultipleSchedulers(TestFunctional):
         self.server.manager(MGR_CMD_SET, SCHED,
                             {'scheduling': 'True'}, id='sc2', expect=True)
         self.server.log_match("processing priority sockets", starttime=t)
-        a = {ATTR_queue: 'wq3',
-             'Resource_List.select': '1:ncpus=2',
-             'Resource_List.walltime': 60}
-        j = Job(TEST_USER1, attrs=a)
-        self.server.submit(j)
-        t = int(time.time())
-        self.server.manager(MGR_CMD_SET, SCHED,
-                            {'scheduling': 'True'}, id='sc3', expect=True)
-        self.server.log_match("processing priority sockets", starttime=t)
