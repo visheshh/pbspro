@@ -576,7 +576,7 @@ wait_request(time_t waittime, struct priority_socks *scks)
 				 	if (FD_ISSET(scks->socket_fd[i], &fdset)) {
 						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 							LOG_DEBUG, __func__, "processing priority sockets");
-						return process_socket(scks->socket_fd[i]);
+						process_socket(scks->socket_fd[i]);
 					}
 				}
 			}
