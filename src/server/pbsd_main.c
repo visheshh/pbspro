@@ -310,7 +310,7 @@ time_t		time_now;
 struct batch_request	*saved_takeover_req=NULL;
 struct python_interpreter_data  svr_interp_data;
 int svr_unsent_qrun_req = 0;	/* Set to 1 for scheduling unsent qrun requests */
-struct priority_socks *scks;
+priority_socks *scks;
 
 AVL_IX_DESC *AVL_jctx = NULL;
 
@@ -2061,7 +2061,6 @@ try_db_again:
 				if (psched->sch_attr[SCHED_ATR_scheduling].at_val.at_long &&
 					psched->svr_do_sched_high != SCH_SCHEDULE_NULL)
 					schedule_high(psched);
-
 				if (psched->svr_do_schedule == SCH_SCHEDULE_RESTART_CYCLE) {
 
 					/* send only to existing connection */
@@ -2071,6 +2070,7 @@ try_db_again:
 					/* connect must have been setup to be valid */
 					if ((psched->scheduler_sock2 != -1) &&
 						(psched->scheduler_sock != -1)) {
+
 						if (put_sched_cmd(psched->scheduler_sock2,
 								psched->svr_do_schedule, NULL) == 0) {
 							sprintf(log_buffer, "sent scheduler restart scheduling cycle request to %s", psched->sc_name);
@@ -2144,7 +2144,7 @@ try_db_again:
 		if (reap_child_flag)
 			reap_child();
 #endif	/* WIN32 */
-		scks = (struct priority_socks *)malloc(sizeof(struct priority_socks));
+		scks = (priority_socks *)malloc(sizeof(priority_socks));
                 if (!scks){
                         log_err(-1, msg_daemonname, "priority_socks memory allocation failed");
                         return -1;

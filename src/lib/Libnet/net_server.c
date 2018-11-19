@@ -98,16 +98,18 @@ int	max_connection = -1;
 static int	num_connections = 0;
 static int	net_is_initialized = 0;
 static void	*poll_context;  /* This is the context of the descriptors being polled */
-static int	init_poll_context();  /* Initialized the poll context */
+static void 	*priority_context; /* This is the priority context of the descriptors being polled */
+static int	init_poll_context(int);  /* Initialized the poll context */
 static void	(*read_func[2])(int);
 static char	logbuf[256];
-
+static int	context_flag = 0;
 /* Private function within this file */
 static int 	connection_find_usable_index(int);
 static int 	connection_find_actual_index(int);
 static void 	accept_conn();
 static void 	cleanup_conn(int);
-
+pbs_sched               *psched;
+pbs_list_head	svr_allscheds;
 /**
  * @brief
  * 	Makes the socket fd as index in the connection array usable and returns
@@ -329,7 +331,7 @@ init_network_add(int sd, void (*readfunc)(int))
 
 	if (initialized == 0) {
 		connection_init();
-		if (init_poll_context() < 0)
+		if (init_poll_context(context_flag) < 0)
 			return (-1);
 		type = Primary;
 	} else if (initialized == 1)
@@ -471,39 +473,6 @@ engage_authentication(conn_t *pconn)
 	return (-1);
 }
 
-/*
- * @brief
- * process_socket  -  The static method processes given socket and
- *                    engages the appropriate connection authentication.
- *
- * @param[in]   sock 	- socket fd to process
- *
- * @retval	-1 for failure
- * @retval	0  for success
- *
- */
-static int
-process_socket(int sock)
-{
-	int idx = connection_find_actual_index(sock);
-	if (idx < 0) {
-		return -1;
-	}
-	svr_conn[idx]->cn_lasttime = time(NULL);
-	if ((svr_conn[idx]->cn_active != Primary) &&
-		(svr_conn[idx]->cn_active != RppComm) &&
-		(svr_conn[idx]->cn_active != Secondary)) {
-		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
-			if (engage_authentication(svr_conn[idx]) == -1) {
-				close_conn(sock);
-				return -1;
-			}
-		}
-	}
-	svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
-	return 0;
-}
-
 /**
  * @brief
  *	Waits for events on a set of sockets and calls processing function
@@ -517,7 +486,8 @@ process_socket(int sock)
  *	routine associated with the socket is invoked.
  *
  * @param[in] waittime - Timeout for tpp_em_wait (poll)
- * @param[in] scks - structure contains active fds and count
+ * @param[in] scks - if structure contains active fds to be processed at high priority
+			and count of fds else if the struct is NULL process all the sockets 
  *
  * @return Error code
  * @retval 0 - Success
@@ -530,29 +500,67 @@ process_socket(int sock)
  *
  */
 int
-wait_request(time_t waittime, struct priority_socks *scks)
+wait_request(time_t waittime, priority_socks *scks)
 {
 	int nfds;
+	int idx;
 	em_event_t *events;
 	int err,i;
 	int timeout = (int) (waittime * 1000); /* milli seconds */
+	nfds = 0;
 
-	/* Platform specific declarations */
+        /* Platform specific declarations */
+        sigset_t pendingsigs;
+        sigset_t emptyset;
+        extern sigset_t allsigs;
+
+	if (scks && scks->active_socks) {
+
+        	if(priority_context == NULL) {
+                	context_flag = 1;
+                	log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
+                        	LOG_DEBUG, __func__, "intializing priority context");
+                	if (init_poll_context(context_flag) < 0) {
+                                return (-1);
+                	}
+        	}
+
+		for (i = 0; i < scks->active_socks; i++) {
+			if (tpp_em_add_fd(priority_context, scks->socket_fd[i], EM_IN) == -1) {
+				snprintf(tpp_get_logbuf(), TPP_LOGBUF_SZ, "em_add_fd() error, errno=%d", errno);
+                		tpp_log_func(LOG_CRIT, __func__, tpp_get_logbuf());
+                		return -1;
+			}
+		}
+		log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
+			LOG_DEBUG, __func__, "processing priority sockets");
+
 #ifndef WIN32
-	sigset_t pendingsigs;
-	sigset_t emptyset;
-	extern sigset_t allsigs;
-
-	/* wait after unblocking signals in an atomic call */
-	sigemptyset(&emptyset);
-	nfds = tpp_em_pwait(poll_context, &events, timeout, &emptyset);
-	err = errno;
+		/* wait after unblocking signals in an atomic call */
+		sigemptyset(&emptyset);
+		nfds = tpp_em_pwait(priority_context, &events, timeout, &emptyset);
+		err = errno;
 #else
-	errno = 0;
-	nfds = tpp_em_wait(poll_context, &events, timeout);
-	err = errno;
+		errno = 0;
+		nfds = tpp_em_wait(priority_context, &events, timeout);
+		err = errno;
 #endif /* WIN32 */
 
+	}
+ 
+	if (!scks || nfds == 0 ) {
+#ifndef WIN32
+                /* wait after unblocking signals in an atomic call */
+		sigemptyset(&emptyset);
+		nfds = tpp_em_pwait(poll_context, &events, timeout, &emptyset);
+		err = errno;
+#else
+		errno = 0;
+		nfds = tpp_em_wait(poll_context, &events, timeout);
+		err = errno;
+#endif /* WIN32 */
+
+	}
 	if (nfds < 0) {
 		if (!(err == EINTR || err == EAGAIN || err == 0)) {
 			snprintf(logbuf, sizeof(logbuf), " tpp_em_wait() error, errno=%d", err);
@@ -560,27 +568,6 @@ wait_request(time_t waittime, struct priority_socks *scks)
 			return (-1);
 		}
 	} else {
-		if (scks) {
-			fd_set		fdset;
-			struct timeval  timeout;
-			timeout.tv_usec = 0;
-			timeout.tv_sec = 0;
-			FD_ZERO(&fdset);
-                        for (i = 0; i < scks->active_socks; i++) {
-                                if (scks->socket_fd[i] != 0) {
-					FD_SET(scks->socket_fd[i], &fdset);
-				}
-			}
-			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) {
-				 for (i = 0; i < scks->active_socks; i++) {
-				 	if (FD_ISSET(scks->socket_fd[i], &fdset)) {
-						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
-							LOG_DEBUG, __func__, "processing priority sockets");
-						return process_socket(scks->socket_fd[i]);
-					}
-				}
-			}
-                }
 
 		for (i = 0; i < nfds; i++) {
 			int em_fd;
@@ -603,11 +590,36 @@ wait_request(time_t waittime, struct priority_socks *scks)
 				}
 			}
 #endif
-			if (process_socket(em_fd) == -1) {
-				return -1;
-			}
+			idx = connection_find_actual_index(em_fd);
+        		if (idx < 0) {
+                		return -1;
+        		}
+
+        		svr_conn[idx]->cn_lasttime = time(NULL);
+
+        		if ((svr_conn[idx]->cn_active != Primary) &&
+                		(svr_conn[idx]->cn_active != RppComm) &&
+                		(svr_conn[idx]->cn_active != Secondary)) {
+
+                		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+                        		if (engage_authentication(svr_conn[idx]) == -1) {
+                                	close_conn(em_fd);
+                                	continue;
+                        		}
+                		}
+        		}
+        		svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+
 		}
 	}
+
+        if (scks && scks->active_socks) {
+                for (i = 0; i < scks->active_socks; i++) {
+                        tpp_em_del_fd(priority_context, scks->socket_fd[i]);
+                }
+
+	}
+
 
 #ifndef WIN32
 	connection_idlecheck();
@@ -1033,7 +1045,7 @@ get_connecthost(int sd, char *namebuf, int size)
  *
  */
 static int
-init_poll_context(void)
+init_poll_context(int context_flag)
 {
 #ifdef WIN32
 	int sd_dummy;
@@ -1053,11 +1065,20 @@ init_poll_context(void)
 		max_connection = nfiles;
 
 #endif
+
 	DBPRT(("#init_poll_context: initializing poll_context for %d", max_connection))
-	poll_context = tpp_em_init(max_connection);
-	if (poll_context == NULL) {
-		log_err(errno, __func__, "could not initialize poll_context");
-		return (-1);
+	if (context_flag){
+		priority_context = tpp_em_init(max_connection);
+		if (priority_context == NULL) {
+			log_err(errno, __func__, "could not initialize priority_context");
+			return (-1);
+		}
+	} else {
+                poll_context = tpp_em_init(max_connection);
+                if (poll_context == NULL) {
+                        log_err(errno, __func__, "could not initialize poll_context");
+                        return (-1);
+		}
 	}
 #ifdef WIN32
 	/* set a dummy fd in the read set so that	*/

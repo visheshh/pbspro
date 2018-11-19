@@ -6223,18 +6223,21 @@ do_rpp(int stream)
 
 /**
  * @brief
- *	wrapper function for do_rpp which calls infinitely
+ *	wrapper function for do_rpp
  *
  * @param[in] fd - file descriptor
  *
  * @return Void
  *
  */
+#define MAX_RPP_LOOPS 3
 void
 rpp_request(int fd)
 {
 	int	stream;
-	for (;;) {
+	int	i;
+	/* To reduce rpp process storm reducing max do_rpp processing to 3 times */
+	for (i=0 ; i < MAX_RPP_LOOPS ; i++) {
 		if ((stream = rpp_poll()) == -1) {
 #ifdef	WIN32
 			if (errno != 10054)
