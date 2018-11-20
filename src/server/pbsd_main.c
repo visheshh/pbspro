@@ -2171,7 +2171,11 @@ try_db_again:
 			}
 		}
 		/* wait for a request and process it */
-		if (wait_request(waittime, scks) != 0) {
+		if (wait_request(waittime,scks) != 0) {
+			snprintf(log_buffer, sizeof(log_buffer), "socket_fd=%lld", scks->socket_fd[0]);
+			log_event(PBSEVENT_DEBUG,
+                        PBS_EVENTCLASS_SERVER, LOG_INFO,
+                        "socket id", log_buffer);	
 			log_err(-1, msg_daemonname, "wait_requst failed");
 		}
 		free(scks->socket_fd); 

@@ -576,9 +576,26 @@ wait_request(time_t waittime, struct priority_socks *scks)
 				 	if (FD_ISSET(scks->socket_fd[i], &fdset)) {
 						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 							LOG_DEBUG, __func__, "processing priority sockets");
-						process_socket(scks->socket_fd[i]);
-					}
-				}
+						int idx = connection_find_actual_index(scks->socket_fd[i]);
+        					if (idx < 0) {
+                					return -1;
+        					}
+                        			svr_conn[idx]->cn_lasttime = time(NULL);
+                        			if ((svr_conn[idx]->cn_active != Primary) &&
+                                			(svr_conn[idx]->cn_active != RppComm) &&
+                                			(svr_conn[idx]->cn_active != Secondary)) {
+
+                                			if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+                                        			if (engage_authentication(svr_conn[idx]) == -1) {
+                                                			close_conn(scks->socket_fd[i]);
+                                                			continue;
+                                        			}
+                                			}	
+                        			}
+                        			svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+
+                                        }
+                                }
 			}
                 }
 
@@ -603,9 +620,23 @@ wait_request(time_t waittime, struct priority_socks *scks)
 				}
 			}
 #endif
-			if (process_socket(em_fd) == -1) {
-				return -1;
-			}
+		        int idx = connection_find_actual_index(em_fd);
+        		if (idx < 0) {
+                		return -1;
+        		}
+        		svr_conn[idx]->cn_lasttime = time(NULL);
+        		if ((svr_conn[idx]->cn_active != Primary) &&
+                		(svr_conn[idx]->cn_active != RppComm) &&
+                		(svr_conn[idx]->cn_active != Secondary)) {
+                		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+                        		if (engage_authentication(svr_conn[idx]) == -1) {
+                                		close_conn(em_fd);
+						continue;
+                        		}
+                		}
+        		}
+        		svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
+
 		}
 	}
 
