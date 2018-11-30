@@ -529,7 +529,7 @@ wait_request(time_t waittime, priority_socks *scks)
 			if (tpp_em_add_fd(priority_context, scks->socket_fd[i], EM_IN) == -1) {
 				snprintf(tpp_get_logbuf(), TPP_LOGBUF_SZ, "em_add_fd() error, errno=%d", errno);
                 		tpp_log_func(LOG_CRIT, __func__, tpp_get_logbuf());
-                		return -1;
+                		continue;
 			}
 		}
 		log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
@@ -545,6 +545,12 @@ wait_request(time_t waittime, priority_socks *scks)
 		nfds = tpp_em_wait(priority_context, &events, timeout);
 		err = errno;
 #endif /* WIN32 */
+
+        	if (scks && scks->active_socks) {
+                	for (i = 0; i < scks->active_socks; i++) {
+                        	tpp_em_del_fd(priority_context, scks->socket_fd[i]);
+                	}
+        	}
 
 	}
  
@@ -611,13 +617,6 @@ wait_request(time_t waittime, priority_socks *scks)
         		svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
 
 		}
-	}
-
-        if (scks && scks->active_socks) {
-                for (i = 0; i < scks->active_socks; i++) {
-                        tpp_em_del_fd(priority_context, scks->socket_fd[i]);
-                }
-
 	}
 
 
