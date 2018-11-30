@@ -108,8 +108,6 @@ static int 	connection_find_usable_index(int);
 static int 	connection_find_actual_index(int);
 static void 	accept_conn();
 static void 	cleanup_conn(int);
-pbs_sched               *psched;
-pbs_list_head	svr_allscheds;
 /**
  * @brief
  * 	Makes the socket fd as index in the connection array usable and returns
@@ -509,10 +507,12 @@ wait_request(time_t waittime, priority_socks *scks)
 	int timeout = (int) (waittime * 1000); /* milli seconds */
 	nfds = 0;
 
-        /* Platform specific declarations */
-        sigset_t pendingsigs;
-        sigset_t emptyset;
-        extern sigset_t allsigs;
+#ifndef WIN32
+	/* Platform specific declarations */
+	sigset_t pendingsigs;
+	sigset_t emptyset;
+	extern sigset_t allsigs;
+#endif /* WIN32 */
 
 	if (scks && scks->active_socks) {
 
@@ -608,12 +608,14 @@ wait_request(time_t waittime, priority_socks *scks)
                 		(svr_conn[idx]->cn_active != Secondary)) {
 
                 		if (!(svr_conn[idx]->cn_authen & PBS_NET_CONN_AUTHENTICATED)) {
+
                         		if (engage_authentication(svr_conn[idx]) == -1) {
                                 	close_conn(em_fd);
                                 	continue;
                         		}
                 		}
         		}
+
         		svr_conn[idx]->cn_func(svr_conn[idx]->cn_sock);
 
 		}
