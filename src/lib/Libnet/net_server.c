@@ -515,6 +515,7 @@ wait_request(time_t waittime, priority_socks *scks)
 #endif /* WIN32 */
 
 	if (scks && scks->active_socks) {
+		timeout = 0;
 
         	if(priority_context == NULL) {
                 	context_flag = 1;
