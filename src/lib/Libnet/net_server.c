@@ -534,10 +534,10 @@ wait_request(time_t waittime, struct priority_socks *scks)
 {
 	int nfds;
 	em_event_t *events;
-	int err,i;
+	int err,i,scheddone,j;
 	int timeout = (int) (waittime * 1000); /* milli seconds */
-
 	/* Platform specific declarations */
+
 #ifndef WIN32
 	sigset_t pendingsigs;
 	sigset_t emptyset;
@@ -560,7 +560,7 @@ wait_request(time_t waittime, struct priority_socks *scks)
 			return (-1);
 		}
 	} else {
-		if (scks) {
+		if (scks && scks->active_socks) {
 			fd_set		fdset;
 			struct timeval  timeout;
 			timeout.tv_usec = 0;
@@ -572,13 +572,14 @@ wait_request(time_t waittime, struct priority_socks *scks)
 				}
 			}
 			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) {
-				 for (i = 0; i < scks->active_socks; i++) {
+				for (i = 0; i < scks->active_socks; i++) {
 				 	if (FD_ISSET(scks->socket_fd[i], &fdset)) {
 						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 							LOG_DEBUG, __func__, "processing priority sockets");
 						process_socket(scks->socket_fd[i]);
 					}
 				}
+
 			}
                 }
 
@@ -587,25 +588,34 @@ wait_request(time_t waittime, struct priority_socks *scks)
 			em_fd = EM_GET_FD(events, i);
 
 #ifndef WIN32
-			/* If there is any of the following signals pending, allow a small window to handle the signal */
-			if( sigpending( &pendingsigs ) == 0) {
-				if (sigismember(&pendingsigs, SIGCHLD)
-					|| sigismember(&pendingsigs, SIGHUP)
-					|| sigismember(&pendingsigs, SIGINT)
-					|| sigismember(&pendingsigs, SIGTERM)) {
+                        /* If there is any of the following signals pending, allow a small window to handle the signal */
+                        if( sigpending( &pendingsigs ) == 0) {
+                                if (sigismember(&pendingsigs, SIGCHLD)
+                                        || sigismember(&pendingsigs, SIGHUP)
+                                        || sigismember(&pendingsigs, SIGINT)
+                                        || sigismember(&pendingsigs, SIGTERM)) {
 
-					if (sigprocmask(SIG_UNBLOCK, &allsigs, NULL) == -1)
-						log_err(errno, __func__, "sigprocmask(UNBLOCK)");
-					if (sigprocmask(SIG_BLOCK, &allsigs, NULL) == -1)
-						log_err(errno, __func__, "sigprocmask(BLOCK)");
+                                        if (sigprocmask(SIG_UNBLOCK, &allsigs, NULL) == -1)
+                                                log_err(errno, __func__, "sigprocmask(UNBLOCK)");
+                                        if (sigprocmask(SIG_BLOCK, &allsigs, NULL) == -1)
+                                                log_err(errno, __func__, "sigprocmask(BLOCK)");
 
-					return (0);
-				}
-			}
+                                        return (0);
+                                }
+                        }
 #endif
-			if (process_socket(em_fd) == -1) {
-				return -1;
+			scheddone = 0;
+			if (scks && scks->active_socks) {
+				for (j = 0; j < scks->active_socks; j++) {
+                                	if (scks->socket_fd[i] == em_fd) {
+                                        	scheddone = 1;
+                                	}
+                        	}
 			}
+			if (scheddone) {
+				continue;
+			}
+			process_socket(em_fd);
 		}
 	}
 
