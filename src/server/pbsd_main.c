@@ -2152,7 +2152,7 @@ try_db_again:
 				scks.active_socks = scks.active_socks + 1;
 			}
 		}
-		scks.socket_fd = (int *)calloc(scks.active_socks, sizeof(int));
+		scks.socket_fd = calloc(scks.active_socks, sizeof(int));
 		if (!scks.socket_fd){
 			log_err(-1, msg_daemonname, "socket_fd memory allocation failed");
 			return -1;

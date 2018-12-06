@@ -6231,6 +6231,7 @@ do_rpp(int stream)
  *
  */
 #define MAX_RPP_LOOPS 3
+/* Reducing rpp request process for a minimum of 3 times to interleave other connections */
 void
 rpp_request(int fd)
 {

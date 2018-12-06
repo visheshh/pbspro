@@ -533,9 +533,12 @@ process_socket(int sock)
 int
 wait_request(time_t waittime, priority_socks *scks)
 {
-	int nfds,i,j;
+	int nfds;
+	int i;
+	int j;
 	em_event_t *events;
-	int err,sched_processed,sched_sock;
+	int err;
+	int prio_sock_processed;
 	int timeout = (int) (waittime * 1000); /* milli seconds */
 	/* Platform specific declarations */
 
@@ -561,7 +564,7 @@ wait_request(time_t waittime, priority_socks *scks)
 			return (-1);
 		}
 	} else {
-		sched_processed = 0;
+		prio_sock_processed = 0;
 		if (scks && scks->active_socks) {
 			fd_set		fdset;
 			struct timeval  timeout;
@@ -569,9 +572,7 @@ wait_request(time_t waittime, priority_socks *scks)
 			timeout.tv_sec = 0;
 			FD_ZERO(&fdset);
                         for (i = 0; i < scks->active_socks; i++) {
-                                if (scks->socket_fd[i] != 0) {
-					FD_SET(scks->socket_fd[i], &fdset);
-				}
+				FD_SET(scks->socket_fd[i], &fdset);
 			}
 			if (select(FD_SETSIZE, &fdset, NULL, NULL, &timeout) != -1) {
 				for (i = 0; i < scks->active_socks; i++) {
@@ -579,7 +580,7 @@ wait_request(time_t waittime, priority_socks *scks)
 						log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 							LOG_DEBUG, __func__, "processing priority sockets");
 						process_socket(scks->socket_fd[i]);
-						sched_processed = 1;
+						prio_sock_processed = 1;
 					}
 				}
 
@@ -591,34 +592,36 @@ wait_request(time_t waittime, priority_socks *scks)
 			em_fd = EM_GET_FD(events, i);
 
 #ifndef WIN32
-                        /* If there is any of the following signals pending, allow a small window to handle the signal */
-                        if( sigpending( &pendingsigs ) == 0) {
-                                if (sigismember(&pendingsigs, SIGCHLD)
-                                        || sigismember(&pendingsigs, SIGHUP)
-                                        || sigismember(&pendingsigs, SIGINT)
-                                        || sigismember(&pendingsigs, SIGTERM)) {
+			/* If there is any of the following signals pending, allow a small window to handle the signal */
+			if( sigpending( &pendingsigs ) == 0) {
+				if (sigismember(&pendingsigs, SIGCHLD)
+					|| sigismember(&pendingsigs, SIGHUP)
+					|| sigismember(&pendingsigs, SIGINT)
+					|| sigismember(&pendingsigs, SIGTERM)) {
 
-                                        if (sigprocmask(SIG_UNBLOCK, &allsigs, NULL) == -1)
-                                                log_err(errno, __func__, "sigprocmask(UNBLOCK)");
-                                        if (sigprocmask(SIG_BLOCK, &allsigs, NULL) == -1)
-                                                log_err(errno, __func__, "sigprocmask(BLOCK)");
+					if (sigprocmask(SIG_UNBLOCK, &allsigs, NULL) == -1)
+						log_err(errno, __func__, "sigprocmask(UNBLOCK)");
+					if (sigprocmask(SIG_BLOCK, &allsigs, NULL) == -1)
+						log_err(errno, __func__, "sigprocmask(BLOCK)");
 
-                                        return (0);
-                                }
-                        }
+					return (0);
+				}
+			}
 #endif
-			sched_sock = 0;
-			if (scks && scks->active_socks && sched_processed) {
+			j = 0;
+			if (scks && scks->active_socks && prio_sock_processed) {
 				for (j = 0; j < scks->active_socks; j++) {
-                                	if (scks->socket_fd[i] == em_fd) {
-                                        	sched_sock = 1;
+                                	if (scks->socket_fd[j] == em_fd) {
 						break;
                                 	}
                         	}
 			}
-			if (!sched_sock) {
-				process_socket(em_fd);
+
+			if (scks && (j < scks->active_socks) && prio_sock_processed) {
+				continue;
 			}
+
+			process_socket(em_fd);
 		}
 	}
 
