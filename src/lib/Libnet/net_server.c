@@ -617,11 +617,14 @@ wait_request(time_t waittime, priority_socks *scks)
                         	}
 			}
 
-			if (scks && (j < scks->active_socks) && prio_sock_processed) {
+			if (scks && prio_sock_processed && (j < scks->active_socks)) {
 				continue;
 			}
 
-			process_socket(em_fd);
+			if( process_socket(em_fd) == -1) {
+				log_event(PBSEVENT_DEBUG, PBS_EVENTCLASS_SERVER,
+					LOG_DEBUG, __func__, "process socket failed");
+			}
 		}
 	}
 

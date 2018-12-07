@@ -2160,7 +2160,7 @@ try_db_again:
 		/* assign the active sockets to socket_fd */
 		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
 			if (psched->scheduler_sock != -1) {
-				scks.socket_fd[act_scks]=psched->scheduler_sock;
+				scks.socket_fd[act_scks] = psched->scheduler_sock;
 				act_scks = act_scks + 1;
 			}
 		}
