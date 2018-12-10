@@ -535,7 +535,6 @@ wait_request(time_t waittime, priority_socks *scks)
 {
 	int nfds;
 	int i;
-	int j;
 	em_event_t *events;
 	int err;
 	int prio_sock_processed;
@@ -571,6 +570,7 @@ wait_request(time_t waittime, priority_socks *scks)
 			timeout.tv_usec = 0;
 			timeout.tv_sec = 0;
 			FD_ZERO(&fdset);
+			
                         for (i = 0; i < scks->active_socks; i++) {
 				FD_SET(scks->socket_fd[i], &fdset);
 			}
@@ -608,17 +608,16 @@ wait_request(time_t waittime, priority_socks *scks)
 				}
 			}
 #endif
-			j = 0;
-			if (scks && scks->active_socks && prio_sock_processed) {
-				for (j = 0; j < scks->active_socks; j++) {
-                                	if (scks->socket_fd[j] == em_fd) {
-						break;
-                                	}
-                        	}
-			}
+			if(prio_sock_processed) {
+				int idx = connection_find_actual_index(em_fd);
+				if (idx < 0) {
+					continue;
+				}
 
-			if (scks && prio_sock_processed && (j < scks->active_socks)) {
-				continue;
+				if (svr_conn[idx]->cn_prio_flag == 1)
+				{
+					continue;
+				}
 			}
 
 			if( process_socket(em_fd) == -1) {

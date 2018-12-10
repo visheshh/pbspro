@@ -216,6 +216,7 @@ struct connection {
 	time_t		cn_lasttime;	/* time last active */
 	void		(*cn_func)(int); /* read function when data rdy */
 	void		(*cn_oncl)(int); /* func to call on close */
+	int		cn_prio_flag;	/* flag for a priority socket */
 	/* following attributes are for */
 	/* credential checking */
 	time_t          cn_timestamp;

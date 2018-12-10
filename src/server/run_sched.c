@@ -312,6 +312,8 @@ contact_sched(int cmd, char *jobid, pbs_net_t pbs_scheduler_addr, unsigned int p
 	if (!conn) {
 		log_err(errno, __func__, "could not find sock in connection table");
 		return (-1);
+	} else {
+		conn->cn_prio_flag = 1;
 	}
 
 	conn->cn_authen |=
