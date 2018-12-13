@@ -139,9 +139,7 @@
 #include "pbs_db.h"
 #include "pbs_sched.h"
 #include "pbs_share.h"
-
 #include <pbs_python.h>  /* for python interpreter */
-
 
 /* External functions called */
 
@@ -310,7 +308,6 @@ time_t		time_now;
 struct batch_request	*saved_takeover_req=NULL;
 struct python_interpreter_data  svr_interp_data;
 int svr_unsent_qrun_req = 0;	/* Set to 1 for scheduling unsent qrun requests */
-priority_socks scks;
 
 AVL_IX_DESC *AVL_jctx = NULL;
 
@@ -844,7 +841,6 @@ main(int argc, char **argv)
 	int			are_primary;
 	int			c, rc;
 	int			i;
-	int			act_scks;
 	int			rppfd;		/* fd to receive is HELLO's */
 	int			privfd;		/* fd to send is messages */
 	uint			tryport;
@@ -2144,31 +2140,11 @@ try_db_again:
 		if (reap_child_flag)
 			reap_child();
 #endif	/* WIN32 */
-		scks.active_socks = 0;
-		act_scks = 0;
-		/* count the number of active schedulers */
-		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
-			if (psched->scheduler_sock != -1) {
-				scks.active_socks = scks.active_socks + 1;
-			}
-		}
-		scks.socket_fd = calloc(scks.active_socks, sizeof(int));
-		if (!scks.socket_fd){
-			log_err(-1, msg_daemonname, "socket_fd memory allocation failed");
-			return -1;
-		}
-		/* assign the active sockets to socket_fd */
-		for (psched = (pbs_sched*) GET_NEXT(svr_allscheds); psched; psched = (pbs_sched*) GET_NEXT(psched->sc_link)) {
-			if (psched->scheduler_sock != -1) {
-				scks.socket_fd[act_scks] = psched->scheduler_sock;
-				act_scks = act_scks + 1;
-			}
-		}
+
 		/* wait for a request and process it */
-		if (wait_request(waittime, &scks) != 0) {
+		if (wait_request(waittime, priority_context) != 0) {
 			log_err(-1, msg_daemonname, "wait_requst failed");
 		}
-		free(scks.socket_fd); 
 #ifdef WIN32
 		connection_idlecheck();
 #else

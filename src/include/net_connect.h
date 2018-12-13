@@ -173,14 +173,10 @@ enum conn_type {
 	Idle
 };
 
-typedef struct priority_socks {
-        int *socket_fd;	/*Array of active socket file descriptors*/
-        int active_socks;	/*Number of active scheduler sockets*/
-} priority_socks;
-
 /* functions available in libnet.a */
 
 conn_t *add_conn(int sock, enum conn_type, pbs_net_t, unsigned int port, void (*func)(int));
+conn_t *add_conn_priority(int sock, enum conn_type, pbs_net_t, unsigned int port, void (*func)(int), int priority_flag);
 int add_conn_data(int sock, void *data); /* Adds the data to the connection */
 void *get_conn_data(int sock); /* Gets the pointer to the data present with the connection */
 void close_socket(int sock);
@@ -195,7 +191,8 @@ unsigned int  get_svrport(char *servicename, char *proto, unsigned int df);
 int  init_network(unsigned int port);
 int  init_network_add(int sock, void (*readfunc)(int));
 void net_close(int);
-int  wait_request(time_t waittime, priority_socks *scks);
+int  wait_request(time_t waittime, void *priority_context);
+extern void *priority_context;
 void net_add_close_func(int, void(*)(int));
 extern  pbs_net_t  get_addr_of_nodebyname(char *name, unsigned int *port);
 
