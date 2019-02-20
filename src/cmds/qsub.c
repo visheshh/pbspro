@@ -158,7 +158,7 @@
 
 #define MAX_QSUB_PREFIX_LEN 32
 #define QSUB_DMN_TIMEOUT_LONG 60 /* timeout for qsub background process */
-#define QSUB_DMN_TIMEOUT_SHORT 5
+#define QSUB_DMN_TIMEOUT_SHORT 50
 
 #define DMN_REFUSE_EXIT 7 /* return code when daemon can't serve a job and exits */
 
@@ -3991,6 +3991,11 @@ dosend(void *s, char *buf, int bufsize)
 	if (bytes != bufsize)
 		return -1;
 #endif
+                fprintf(stdout, "Job pid = %d\n",getpid());
+                (void)fflush(stdout);
+		//char log_buf[1024];
+        	//sprintf(log_buf, "Job pid in dosend = %d", getpid());
+        	//log_syslog(log_buf);
 	return 0;
 }
 
@@ -5343,6 +5348,8 @@ do_daemon_stuff(void)
 	FD_SET(bindfd, &readset);
 	FD_SET(svr_sock, &readset);
 	maxfd = (bindfd > svr_sock) ? bindfd : svr_sock;
+	sprintf(log_buf, "Job pid in do daemon outside while = %d", getpid());
+        log_syslog(log_buf);
 	while (1) {
 
 		err_op = "";
@@ -5369,6 +5376,7 @@ do_daemon_stuff(void)
 		 * request could take a while to reach server and get processed
 		 * Qsub then does a regular submit (new connection)
 		 */
+
 		if (cred_timeout == 0 && ((time(0) - connect_time) > (CREDENTIAL_LIFETIME - QSUB_DMN_TIMEOUT_LONG))) {
 			unlink(fl);
 			cred_timeout = 1;
@@ -5401,6 +5409,10 @@ do_daemon_stuff(void)
 			err_op = "recv data from foreground";
 			goto error;
 		}
+                if (cred_timeout == 1){
+                        sprintf(log_buf, "Job pid after do recv = %d", getpid());
+                        log_syslog(log_buf);
+                }
 
 		/*
 		 * At this point the background qsub daemon has received all the data from the
@@ -5414,6 +5426,11 @@ do_daemon_stuff(void)
 			err_op = "send data to foreground";
 			goto error;
 		}
+		if (cred_timeout == 1){
+        		sprintf(log_buf, "Job pid after do send = %d", getpid());
+        		log_syslog(log_buf);
+		}
+
 
 #if defined(PBS_PASS_CREDENTIALS)
 		if (passwd_buf[0] != '\0') {
@@ -5556,6 +5573,9 @@ fork_and_stay(void)
 		 */
 		exit(1);
 	}
+	char log_buf[1024];
+        sprintf(log_buf, "Job pid in fork and stay = %d", getpid());
+        log_syslog(log_buf);
 	/* parent code */
 	return 0;
 }
