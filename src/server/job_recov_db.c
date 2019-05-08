@@ -529,7 +529,7 @@ job_recov_db(char *jid)
 	obj.pbs_db_un.pbs_db_job = &dbjob;
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj) != 0)
+	if (pbs_db_load_obj(conn, &obj, 0) != 0)
 		goto db_err;
 
 	pj = job_recov_db_spl(&dbjob);
@@ -675,7 +675,7 @@ resv_recov_db(char *resvid)
 	obj.pbs_db_un.pbs_db_resv = &dbresv;
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj) != 0)
+	if (pbs_db_load_obj(conn, &obj, 0) != 0)
 		goto db_err;
 
 	if (db_to_svr_resv(presv, &dbresv) != 0)

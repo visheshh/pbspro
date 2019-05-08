@@ -229,7 +229,7 @@ que_recov_db(char *qname)
 	strncpy(dbque.qu_name, qname, sizeof(dbque.qu_name));
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj) != 0)
+	if (pbs_db_load_obj(conn, &obj, 0) != 0)
 		goto db_err;
 
 	if (db_to_svr_que(pq, &dbque) != 0)

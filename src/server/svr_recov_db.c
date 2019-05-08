@@ -278,7 +278,7 @@ svr_recov_db(void)
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj) != 0)
+	if (pbs_db_load_obj(conn, &obj, 0) != 0)
 		goto db_err;
 
 	if (db_to_svr_svr(&server, &dbsvr) != 0)
@@ -405,7 +405,7 @@ sched_recov_db(char *sname)
 	strncpy(dbsched.sched_name, sname, sizeof(dbsched.sched_name));
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj) != 0)
+	if (pbs_db_load_obj(conn, &obj, 0) != 0)
 		goto db_err;
 
 	if (db_to_svr_sched(ps, &dbsched) != 0)
