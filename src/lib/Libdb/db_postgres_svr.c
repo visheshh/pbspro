@@ -228,10 +228,12 @@ pg_db_save_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int savetype)
  * @return      Error code
  * @retval	-1 - Failure
  * @retval	 0 - Success
-* @retval	>1 - Number of attributes
+ * @retval	 1 -  Success but no rows loaded
+ * @retval	>1 - Number of attributes
  * @retval 	-2 -  Success but data same as old, so not loading data (but locking if lock requested)
  *
  */
+
 int
 pg_db_load_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock)
 {
@@ -243,6 +245,7 @@ pg_db_load_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock)
 	static int sv_numjobs_fnum, sv_numque_fnum, sv_jobidnumber_fnum, sv_savetm_fnum,
 	sv_creattm_fnum, attributes_fnum;
 	static int fnums_inited = 0;
+	BIGINT db_savetm;
 
 	if ((rc = pg_db_query(conn, STMT_SELECT_SVR, 0, lock, &res)) != 0)
 		return -1;
@@ -266,10 +269,18 @@ pg_db_load_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock)
 
 	ps->sv_savetm = db_savetm; /* update the save timestamp */
 
+	GET_PARAM_BIGINT(res, 0, db_savetm, sv_savetm_fnum);
+	if (ps->sv_savetm == db_savetm) {
+		/* data same as read last time, so no need to read any further, return success from here */
+		/* however since we loaded data from the database, the row is locked if a lock was requested */
+		return -2;
+	}
+	ps->sv_savetm = db_savetm; /* update the save timestamp */
 	GET_PARAM_INTEGER(res, 0, ps->sv_numjobs, sv_numjobs_fnum);
 	GET_PARAM_INTEGER(res, 0, ps->sv_numque, sv_numque_fnum);
 	GET_PARAM_BIGINT(res, 0, ps->sv_jobidnumber, sv_jobidnumber_fnum);
 	GET_PARAM_BIGINT(res, 0, ps->sv_creattm, sv_creattm_fnum);
+	GET_PARAM_BIGINT(res, 0, ps->sv_savetm, sv_savetm_fnum);
 	GET_PARAM_BIN(res, 0, raw_array, attributes_fnum);
 
 	/* convert attributes from postgres raw array format */

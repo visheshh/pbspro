@@ -329,7 +329,7 @@ req_runjob(struct batch_request *preq)
 
 	/* the job must be in an execution queue */
 
-	if (find_queuebyname(parent->ji_qs.ji_queue)->qu_qs.qu_type != QTYPE_Execution) {
+	if (find_queuebyname(parent->ji_qs.ji_queue, 0)->qu_qs.qu_type != QTYPE_Execution) {
 		req_reject(PBSE_IVALREQ, 0, preq);
 		return;
 	}
@@ -913,7 +913,7 @@ svr_startjob(job *pjob, struct batch_request *preq)
 	int   f;
 	int   rc;
 	char *nspec;
-	pbs_queue *pque = find_queuebyname(pjob->ji_qs.ji_queue);
+	pbs_queue *pque = find_queuebyname(pjob->ji_qs.ji_queue, 0);
 	long delay = 10; /* Default value for kill_delay */
 
 	/* if not already setup, transfer the control/script file basename */

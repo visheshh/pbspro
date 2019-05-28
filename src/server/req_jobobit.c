@@ -642,7 +642,7 @@ rel_resc(job *pjob)
 		set_scheduler_flag(SCH_SCHEDULE_TERM, psched);
 	else {
 		pbs_queue *pq;
-		pq = find_queuebyname( pjob->ji_qs.ji_queue);
+		pq = find_queuebyname( pjob->ji_qs.ji_queue, 0);
 		sprintf(log_buffer, "Unable to reach scheduler associated with partition %s", pq->qu_attr[QA_ATR_partition].at_val.at_str);
 		log_err(-1, __func__, log_buffer);
 	}

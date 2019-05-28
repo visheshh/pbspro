@@ -269,6 +269,10 @@ svr_recov_db(int lock)
 	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
 	pbs_db_svr_info_t dbsvr;
 	pbs_db_obj_info_t obj;
+	int rc;
+	int		 i;
+	attribute	*pattr;
+	attribute_def	*pdef;
 
 	/* load server_qs */
 	dbsvr.attr_list.attr_count = 0;
@@ -278,10 +282,27 @@ svr_recov_db(int lock)
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
 	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
 
+	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+
+	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj, 0) != 0)
+    rc = pbs_db_load_obj(conn, &obj, lock);
+	if (rc == -1)
 		goto db_err;
-	
+
+	if (rc == -2)
+		return 0;
+ 
+ 	/* free all the svr attributes */
+
+	for (i=0; i < (int)SRV_ATR_LAST; i++) {
+		pdef  = &svr_attr_def[i];
+		pattr = &server.sv_attr[i];
+
+		pdef->at_free(pattr);
+	}
+
 	if (db_to_svr_svr(&server, &dbsvr) != 0)
 		goto db_err;
 
@@ -290,6 +311,7 @@ svr_recov_db(int lock)
 	return (0);
 
 db_err:
+	log_err(-1, "svr_recov", "read of svrdb failed");
 	return -1;
 }
 

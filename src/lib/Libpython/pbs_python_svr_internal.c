@@ -3256,7 +3256,7 @@ _pps_helper_get_queue(pbs_queue *pque, const char *que_name)
 				"Unable to populate python queue object");
 			return NULL;
 		}
-		que = find_queuebyname((char *)que_name);
+		que = find_queuebyname((char *)que_name, 0);
 	}
 
 	/* make sure que is not null */
@@ -8797,7 +8797,7 @@ pbsv1mod_meth_iter_nextfunc(PyObject *self, PyObject *args, PyObject *kwds)
 				if ((filter2 != NULL) && (filter2[0] != '\0')) {
 #endif /* localmod 014 */
 					/* refers to the queue name */
-					pque = find_queuebyname(filter2);
+					pque = find_queuebyname(filter2, 0);
 					if (pque == NULL) {
 						sprintf(log_buffer, "queue %s not found",
 							filter2);

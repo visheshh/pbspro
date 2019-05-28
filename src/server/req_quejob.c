@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1994-2018 Altair Engineering, Inc.
+ * Copyright (C) 1994-2019 Altair Engineering, Inc.
  * For more information, contact Altair at www.altair.com.
  *
  * This file is part of the PBS Professional ("PBS Pro") software.
@@ -309,6 +309,7 @@ req_quejob(struct batch_request *preq)
 	resource_def	*prdefplc;
 	resource	*presc;
 	conn_t		*conn;
+	pbs_db_conn_t *conn_db = svr_db_conn;
 #else
 	mom_hook_input_t  hook_input;
 	mom_hook_output_t hook_output;
@@ -339,6 +340,9 @@ req_quejob(struct batch_request *preq)
 		conn->cn_authen &= ~PBS_NET_CONN_FORCE_QSUB_UPDATE;
 		return;
 	}
+
+	if (pbs_db_begin_trx(conn_db, 0, 0) != 0)
+		goto err;
 
 	psatl = (svrattrl *)GET_NEXT(preq->rq_ind.rq_queuejob.rq_attr);
 	while (psatl) {
@@ -486,7 +490,6 @@ req_quejob(struct batch_request *preq)
 		}
 	} */
 
-
 	/* find requested queue, is it there? */
 
 	qname = preq->rq_ind.rq_queuejob.rq_destin;
@@ -494,7 +497,7 @@ req_quejob(struct batch_request *preq)
 		pque = get_dfltque();
 		rc   = PBSE_QUENODFLT;
 	} else { 		/* else find the named queue */
-		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin);
+		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin, 1);
 #ifdef NAS /* localmod 075 */
 		if (pque == NULL)
 			pque = find_resvqueuebyname(qname);
@@ -1012,7 +1015,11 @@ req_quejob(struct batch_request *preq)
 		return;
 	}
 
-
+	que_save_db(pque, QUE_SAVE_FULL);
+	if (pbs_db_end_trx(conn_db, PBS_DB_COMMIT) != 0)
+		goto err;
+	err:
+		(void) pbs_db_end_trx(conn_db, PBS_DB_ROLLBACK);
 	/*
 	 * if single, signon password scheme is in place, only allow submission
 	 * if a per user per server password exists.
@@ -1041,6 +1048,7 @@ req_quejob(struct batch_request *preq)
 				return;
 			}
 	}
+
 
 	(void)strcpy(pj->ji_qs.ji_queue, pque->qu_qs.qu_name);
 
@@ -1118,6 +1126,7 @@ req_quejob(struct batch_request *preq)
 			return;
 		}
 	}
+
 #endif		/* not PBS_MOM */
 
 	/* set remaining job structure elements			*/
@@ -1133,6 +1142,7 @@ req_quejob(struct batch_request *preq)
 	pj->ji_qs.ji_un_type = JOB_UNION_TYPE_NEW;
 	pj->ji_qs.ji_un.ji_newt.ji_fromsock = sock;
 	pj->ji_qs.ji_un.ji_newt.ji_scriptsz = 0;
+
 
 #ifdef PBS_MOM
 	mom_hook_input_init(&hook_input);
@@ -1271,6 +1281,7 @@ req_quejob(struct batch_request *preq)
 
 		}
 	}
+
 #endif	/* not PBS_MOM */
 }
 
@@ -1858,6 +1869,9 @@ req_commit(struct batch_request *preq)
 	pj->ji_wattr[(int)JOB_ATR_qrank].at_flags |=
 		ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
 
+
+	pbs_db_begin_trx(conn, 0, 0);
+
 	if ((rc = svr_enquejob(pj)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
@@ -1892,7 +1906,6 @@ req_commit(struct batch_request *preq)
 	}
 
 	/* save job and job script within single transaction */
-	pbs_db_begin_trx(conn, 0, 0);
 
 	/* Make things faster by writing job only once here  - at commit time */
 	if (job_or_resv_save((void *) pj, SAVEJOB_NEW, JOB_OBJECT)) {
@@ -1934,7 +1947,7 @@ req_commit(struct batch_request *preq)
 	 * to the user.
 	 */
 
-	pque = find_queuebyname(pj->ji_qs.ji_queue);
+	pque = find_queuebyname(pj->ji_qs.ji_queue, 0);
 
 	if ((preq->rq_fromsvr == 0) &&
 		(pque->qu_qs.qu_type == QTYPE_RoutePush) &&
@@ -3086,7 +3099,7 @@ handle_qmgr_reply_to_resvQcreate(struct work_task *pwt)
 		log_event(PBSEVENT_RESV, PBS_EVENTCLASS_RESV, LOG_INFO,
 			presv->ri_qs.ri_resvID, log_buffer);
 	} else {
-		pque = find_queuebyname(preq->rq_ind.rq_manager.rq_objname);
+		pque = find_queuebyname(preq->rq_ind.rq_manager.rq_objname, 0);
 		if ((presv->ri_qp = pque) != 0)
 			pque->qu_resvp = presv;
 		(void)strcpy(presv->ri_qs.ri_queue,

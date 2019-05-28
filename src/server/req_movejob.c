@@ -194,6 +194,7 @@ req_orderjob(struct batch_request *req)
 	long	 rank;
 	int	 rc;
 	char	 tmpqn[PBS_MAXQUEUENAME+1];
+	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
 	if ((pjob1=chk_job_request(req->rq_ind.rq_move.rq_jid, req, &jt1)) == NULL)
 		return;
@@ -218,14 +219,14 @@ req_orderjob(struct batch_request *req)
 #endif	/* NDEBUG */
 		req_reject(PBSE_BADSTATE, 0, req);
 		return;
-	} else if (find_queuebyname(pjob1->ji_qs.ji_queue) != find_queuebyname(pjob2->ji_qs.ji_queue)) {
+	} else if (find_queuebyname(pjob1->ji_qs.ji_queue, 0) != find_queuebyname(pjob2->ji_qs.ji_queue, 0)) {
 
 		/* Jobs are in different queues */
 
-		if ((rc = svr_chkque(pjob1, find_queuebyname(pjob2->ji_qs.ji_queue),
+		if ((rc = svr_chkque(pjob1, find_queuebyname(pjob2->ji_qs.ji_queue, 0),
 			get_hostPart(pjob1->ji_wattr[(int)JOB_ATR_job_owner].at_val.at_str),
 			MOVE_TYPE_Order)) ||
-			(rc = svr_chkque(pjob2, find_queuebyname(pjob1->ji_qs.ji_queue),
+			(rc = svr_chkque(pjob2, find_queuebyname(pjob1->ji_qs.ji_queue, 0),
 			get_hostPart(pjob2->ji_wattr[(int)JOB_ATR_job_owner].at_val.at_str),
 			MOVE_TYPE_Order))) {
 			req_reject(rc, 0, req);
@@ -242,7 +243,7 @@ req_orderjob(struct batch_request *req)
 	pjob2->ji_wattr[(int)JOB_ATR_qrank].at_val.at_long = rank;
 	pjob2->ji_wattr[(int)JOB_ATR_qrank].at_flags |= ATR_VFLAG_MODCACHE;
 
-	if (find_queuebyname(pjob1->ji_qs.ji_queue) != find_queuebyname(pjob2->ji_qs.ji_queue)) {
+	if (find_queuebyname(pjob1->ji_qs.ji_queue, 0) != find_queuebyname(pjob2->ji_qs.ji_queue, 0)) {
 		(void)strcpy(tmpqn, pjob1->ji_qs.ji_queue);
 		(void)strcpy(pjob1->ji_qs.ji_queue, pjob2->ji_qs.ji_queue);
 		(void)strcpy(pjob2->ji_qs.ji_queue, tmpqn);

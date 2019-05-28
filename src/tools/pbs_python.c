@@ -193,7 +193,7 @@ find_resv(char *resvid)
 }
 
 pbs_queue *
-find_queuebyname(char *qname)
+find_queuebyname(char *qname, int lock)
 {
 	return NULL;
 }

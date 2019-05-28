@@ -459,7 +459,7 @@ preempt_targets_action(resource *presc, attribute *pattr, void *pobject, int typ
 				if (ch != '=')
 					return PBSE_BADATVAL;
 				p++;
-				if (find_queuebyname(p) != NULL) {
+				if (find_queuebyname(p, 0) != NULL) {
 					continue;
 				}
 				else {

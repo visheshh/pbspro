@@ -2086,7 +2086,7 @@ Rmv_if_resv_not_possible(job *pjob)
 			pjob->ji_resvp = presv;
 		}
 	} else {
-		if ((pque = find_queuebyname(pjob->ji_qs.ji_queue)) !=0) {
+		if ((pque = find_queuebyname(pjob->ji_qs.ji_queue, 0)) !=0) {
 			if ((presv = pque->qu_resvp) !=0) {
 
 				/*we are dealing with a job in a reservation*/
@@ -2127,7 +2127,7 @@ attach_queue_to_reservation(resc_resv *presv)
 {
 	if (presv == NULL || presv->ri_qs.ri_type != RESC_RESV_OBJECT)
 		return (0);
-	presv->ri_qp = find_queuebyname(presv->ri_qs.ri_queue);
+	presv->ri_qp = find_queuebyname(presv->ri_qs.ri_queue, 0);
 
 	if (presv->ri_qp) {
 		/*resv points to queue and queue points back*/
