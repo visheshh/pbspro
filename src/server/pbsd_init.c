@@ -223,11 +223,11 @@ static void  init_abt_job(job *);
 static void  change_logs(int);
 int   chk_save_file(char *filename);
 static void  need_y_response(int, char *);
-static int   pbsd_init_job(job *pjob, int type);
-static int   pbsd_init_reque(job *job, int change_state);
+int   pbsd_init_job(job *pjob, int type);
+int   pbsd_init_reque(job *job, int change_state);
 static void  resume_net_move(struct work_task *);
 static void  stop_me(int);
-static int   Rmv_if_resv_not_possible(job *);
+int   Rmv_if_resv_not_possible(job *);
 static int   attach_queue_to_reservation(resc_resv *);
 static void  call_log_license(struct work_task *);
 extern int create_resreleased(job *pjob);
@@ -364,8 +364,6 @@ pbsd_init(int type)
 	char	*hook_suffix = HOOK_FILE_SUFFIX;
 	int	hook_suf_len = strlen(hook_suffix);
 	int	 logtype;
-	int	 numjobs;
-	job	*pjob;
 	hook	*phook, *phook_current;
 	pbs_queue *pque;
 	resc_resv *presv;
@@ -378,7 +376,6 @@ pbsd_init(int type)
 	struct sigaction oact;
 #endif
 	struct tm	*ptm;
-	pbs_db_job_info_t	dbjob;
 	pbs_db_resv_info_t	dbresv;
 	pbs_db_que_info_t	dbque;
 	pbs_db_sched_info_t	dbsched;
@@ -645,7 +642,7 @@ pbsd_init(int type)
 
 	/* 5. If not a "create" initialization, recover server db */
 	/*    and sched db					  */
-	rc =svr_recov_db();
+	rc =svr_recov_db(0);
 	if ((rc != 0) && (type != RECOV_CREATE)) {
 #ifdef WIN32
 		if (stalone == 1)
@@ -867,7 +864,7 @@ pbsd_init(int type)
 	}
 	while ((rc = pbs_db_cursor_next(conn, state, &obj)) == 0) {
 		/* recover queue */
-		if ((pque = que_recov_db(dbque.qu_name)) != NULL) {
+		if ((pque = que_recov_db(dbque.qu_name, NULL, 0)) != NULL) {
 			/* que_recov increments sv_numque */
 			sprintf(log_buffer, msg_init_recovque,
 				pque->qu_qs.qu_name);
@@ -979,79 +976,6 @@ pbsd_init(int type)
 
 	server.sv_qs.sv_numjobs = 0;
 
-	/* get jobs from DB */
-	obj.pbs_db_obj_type = PBS_DB_JOB;
-	obj.pbs_db_un.pbs_db_job = &dbjob;
-	state = pbs_db_cursor_init(conn, &obj, NULL);
-	if (state == NULL) {
-		sprintf(log_buffer, "%s", (char *) conn->conn_db_err);
-		log_err(-1, __func__, log_buffer);
-		pbs_db_cursor_close(conn, state);
-		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
-		return (-1);
-	}
-	if (pbs_db_get_rowcount(state) <= 0) {
-		if ((type != RECOV_CREATE) && (type != RECOV_COLD)) {
-				log_event(PBSEVENT_DEBUG, PBS_EVENTCLASS_SERVER,
-					LOG_DEBUG,
-					msg_daemonname, msg_init_nojobs);
-		}
-	} else {
-		/* Now, for each job found ... */
-		numjobs = 0;
-		while ((rc = pbs_db_cursor_next(conn, state, &obj)) == 0) {
-			if ((pjob = job_recov_db_spl(&dbjob)) == NULL) {
-				if ((type == RECOV_COLD) || (type == RECOV_CREATE)) {
-					/* remove the loaded job from db */
-					if (pbs_db_delete_obj(conn, &obj) != 0) {
-						sprintf(log_buffer, "job %s not purged", dbjob.ji_jobid);
-						log_err(-1, __func__, log_buffer);
-					}
-				} else {
-					sprintf(log_buffer, "Failed to recover job %s", dbjob.ji_jobid);
-					log_event(PBSEVENT_SYSTEM,
-						PBS_EVENTCLASS_SERVER, LOG_NOTICE,
-						msg_daemonname, log_buffer);
-				}
-				continue;
-			}
-			pbs_db_reset_obj(&obj);
-
-			/*chk if job belongs to a reservation or
-			 *is a reservation job.  If this is true
-			 *and the reservation is no longer possible,
-			 *return (1) else return (0)
-			 */
-			if (Rmv_if_resv_not_possible(pjob)) {
-				account_record(PBS_ACCT_ABT, pjob, "");
-				svr_mailowner(pjob, MAIL_ABORT, MAIL_NORMAL,
-					msg_init_abt);
-				check_block(pjob, msg_init_abt);
-				job_purge(pjob);
-				continue;
-			}
-
-			rc = pbsd_init_job(pjob, type);
-			/*
-			 *	in the db version, job always has job script
-			 *	since they are saved together, so nothing to
-			 *	check
-			 *
-			 */
-			if ((++numjobs % 20) == 0) {
-				/* periodically touch the file so the  */
-				/* world knows we are alive and active */
-				(void)update_svrlive();
-			}
-		}
-
-		sprintf(log_buffer, msg_init_exptjobs,
-			server.sv_qs.sv_numjobs);
-		log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, LOG_NOTICE,
-			msg_daemonname, log_buffer);
-	}
-
-	pbs_db_cursor_close(conn, state);
 	/* close transaction */
 	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
 		return (-1);
@@ -1506,7 +1430,7 @@ pbsd_init(int type)
  *
  * @return	void
  */
-static void
+void
 reassign_resc(job *pjob)
 {
 	int   set_exec_vnode;
@@ -1625,7 +1549,7 @@ reassign_resc(job *pjob)
  * @retval	0	- success
  * @retval	-1	- error.
  */
-static int
+int
 pbsd_init_job(job *pjob, int type)
 {
 	unsigned int d;
@@ -1884,7 +1808,7 @@ pbsd_init_job(job *pjob, int type)
  * @retval	0	- success
  * @retval	-1	- error.
  */
-static int
+int
 pbsd_init_reque(job *pjob, int change_state)
 {
 	char logbuf[384];
@@ -2136,7 +2060,7 @@ init_abt_job(job *pjob)
  * @retval	0	- OK to requeue
  * @retval	1	- should not be requeued
  */
-static int
+int
 Rmv_if_resv_not_possible(job *pjob)
 {
 	int	    rc=0;	/*assume OK to requeue*/

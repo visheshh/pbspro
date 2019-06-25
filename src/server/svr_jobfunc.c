@@ -242,6 +242,7 @@ tickle_for_reply(void)
 /**
  * @brief
  * 		svr_enquejob	-	Enqueue the job into specified queue.
+ * 		uses pjob->ji_newjob to determine if pjob is new job or reloaded job
  *
  * @param[in]	pjob	-	The job to be enqueued.
  *
@@ -269,50 +270,17 @@ svr_enquejob(job *pjob)
 
 	pque = find_queuebyname(pjob->ji_qs.ji_queue);
 	if (pque == NULL) {
-		/*
-		 * If it is a history job, then don't return PBSE_UNKQUE
-		 * error but link the job to SERVER job list and update
-		 * job history timestamp and subjob state table and return
-		 * 0 (SUCCESS). INFO: The job is not associated with any
-		 * queue as the queue has been already purged.
-		 */
-		if ((pjob->ji_qs.ji_state == JOB_STATE_MOVED) ||
-			(pjob->ji_qs.ji_state == JOB_STATE_FINISHED)) {
-
-			if (is_linked(&svr_alljobs, &pjob->ji_alljobs) == 0) {
-				append_link(&svr_alljobs, &pjob->ji_alljobs, pjob);
-				/**
-				 * Add to AVL tree so that find_job() can return
-				 * faster compared to linked list traverse.
-				 */
-				svr_avljob_oper(pjob, 0);
-			}
-			server.sv_qs.sv_numjobs++;
-			server.sv_jobstates[pjob->ji_qs.ji_state]++;
-			if (pjob->ji_qs.ji_svrflags & JOB_SVFLG_ArrayJob) {
-				struct ajtrkhd *ptbl = pjob->ji_ajtrk;
-				if (ptbl) {
-					int indx;
-
-					for (indx = 0; indx < ptbl->tkm_ct; ++indx)
-						set_subjob_tblstate(pjob, indx, pjob->ji_qs.ji_state);
-				}
-			}
-			return (0);
-		} else {
+//SHRINI_THOUGHTS: removed as no point in caching history jobs
 			return (PBSE_UNKQUE);
-		}
 	}
 
 	/* add job to server's all job list and update server counts */
 
-#ifndef NDEBUG
 	(void)sprintf(log_buffer, "enqueuing into %s, state %x hop %ld",
 		pque->qu_qs.qu_name, pjob->ji_qs.ji_state,
 		pjob->ji_wattr[(int)JOB_ATR_hopcount].at_val.at_long);
 	log_event(PBSEVENT_DEBUG2, PBS_EVENTCLASS_JOB, LOG_DEBUG,
 		pjob->ji_qs.ji_jobid, log_buffer);
-#endif	/* NDEBUG */
 
 	pjcur = (job *)GET_PRIOR(svr_alljobs);
 	while (pjcur) {
@@ -339,12 +307,15 @@ svr_enquejob(job *pjob)
 	 */
 	svr_avljob_oper(pjob, 0);
 
-	server.sv_qs.sv_numjobs++;
-	server.sv_jobstates[pjob->ji_qs.ji_state]++;
+	//SHRINI_THOUGHTS: below should be atomically done for new jobs only
+	if (pjob->ji_newjob)
+	{
+		server.sv_qs.sv_numjobs++;
+		server.sv_jobstates[pjob->ji_qs.ji_state]++;
+	}
 
 	/* place into queue in order of queue rank starting at end */
 
-	pjob->ji_qhdr = pque;
 
 	pjcur = (job *)GET_PRIOR(pque->qu_jobs);
 	while (pjcur) {
@@ -366,14 +337,19 @@ svr_enquejob(job *pjob)
 	}
 
 	/* update counts: queue and queue by state */
+	//SHRINI_THOUGHTS: below should be atomically done for new jobs only
+	if (pjob->ji_newjob)
+	{
+		pque->qu_numjobs++;
+		pque->qu_njstate[pjob->ji_qs.ji_state]++;
+	}
 
-	pque->qu_numjobs++;
-	pque->qu_njstate[pjob->ji_qs.ji_state]++;
-
+#if 0 //SHRINI_THOUGHTS: not worrying about array jobs for now
 	if ((pjob->ji_qs.ji_state == JOB_STATE_MOVED) ||
 		(pjob->ji_qs.ji_state == JOB_STATE_FINISHED)) {
 		if (pjob->ji_qs.ji_svrflags & JOB_SVFLG_ArrayJob) {
 			int indx;
+			//SHRINI_THOUGHTS: F U array jobs !!
 			struct ajtrkhd *ptbl = pjob->ji_ajtrk;
 			if (ptbl) {
 				for (indx = 0; indx < ptbl->tkm_ct; ++indx)
@@ -384,6 +360,7 @@ svr_enquejob(job *pjob)
 		}
 		return (0);
 	}
+#endif //#if 0 //SHRINI_THOUGHTS: not worrying about array jobs for now
 
 	/* update the current location and type attribute */
 
@@ -420,7 +397,7 @@ svr_enquejob(job *pjob)
 	 * set any "unspecified" resources which have default values,
 	 * first with queue defaults, then with server defaults
 	 */
-
+//SHRINI_THOUGHTS: hope set_resc_deflt() works for both new and reloaded jobs
 	rc = set_resc_deflt((void *)pjob, JOB_OBJECT, NULL);
 	if (rc)
 		return rc;
@@ -437,8 +414,8 @@ svr_enquejob(job *pjob)
 	}
 
 	/* update any entity count and entity resources usage for the queue */
-
-	if (!(pjob->ji_qs.ji_svrflags & JOB_SVFLG_SubJob) || (server.sv_attr[(int)SRV_ATR_State].at_val.at_long == SV_STATE_INIT)) {
+	//SHRINI_THOUGHTS: entity limits usage should not be accounted for DB reloaded jobs
+	if ((pjob->ji_newjob && !(pjob->ji_qs.ji_svrflags & JOB_SVFLG_SubJob)) || (server.sv_attr[(int)SRV_ATR_State].at_val.at_long == SV_STATE_INIT)) {
 		account_entity_limit_usages(pjob, pque, NULL, INCR, ETLIM_ACC_ALL);
 	}
 
@@ -467,7 +444,8 @@ svr_enquejob(job *pjob)
 		 * ignore this during Server recovery as the dependency
 		 * was registered when the job was first enqueued.
 		 */
-
+		//SHRINI_THOUGHTS: fingers crossed, that below works for reloaded jobs
+		//SHRINI_THOUGHTS: eventually job dependency feature should move out of server
 		if (server.sv_attr[(int)SRV_ATR_State].at_val.at_long != SV_STATE_INIT) {
 			if (pjob->ji_wattr[(int)JOB_ATR_depend].at_flags&ATR_VFLAG_SET) {
 				rc = depend_on_que(&pjob->ji_wattr[(int)JOB_ATR_depend], pjob, ATR_ACTION_NOOP);
@@ -487,12 +465,14 @@ svr_enquejob(job *pjob)
 				ATR_VFLAG_SET | ATR_VFLAG_MODCACHE;
 
 			/* better notify the Scheduler we have a new job */
-
-			if (find_assoc_sched_jid(pjob->ji_qs.ji_jobid, &psched))
-				set_scheduler_flag(SCH_SCHEDULE_NEW, psched);
-			else {
-				sprintf(log_buffer, "Unable to reach scheduler associated with job %s", pjob->ji_qs.ji_jobid);
-				log_err(-1, __func__, log_buffer);
+			if (pjob->ji_newjob)
+			{
+				if (find_assoc_sched_jid(pjob->ji_qs.ji_jobid, &psched))
+					set_scheduler_flag(SCH_SCHEDULE_NEW, psched);
+				else {
+					sprintf(log_buffer, "Unable to reach scheduler associated with job %s", pjob->ji_qs.ji_jobid);
+					log_err(-1, __func__, log_buffer);
+				}
 			}
 		} else if (server.sv_attr[SRV_ATR_EligibleTimeEnable].at_val.at_long &&
 			server.sv_attr[SRV_ATR_scheduling].at_val.at_long) {
@@ -551,7 +531,7 @@ svr_dequejob(job *pjob)
 			bad_ct = 1;
 	}
 
-	if ((pque = pjob->ji_qhdr) != NULL) {
+	if ((pque = find_queuebyname(pjob->ji_qs.ji_queue)) != NULL) {
 
 		/* update any entity count and entity resources usage at que */
 
@@ -566,7 +546,6 @@ svr_dequejob(job *pjob)
 			if (--pque->qu_njstate[pjob->ji_qs.ji_state] < 0)
 				bad_ct = 1;
 		}
-		pjob->ji_qhdr = NULL;
 	}
 
 #ifndef NDEBUG
@@ -603,7 +582,7 @@ int
 svr_setjobstate(job *pjob, int newstate, int newsubstate)
 {
 	int    changed = 0;
-	pbs_queue *pque = pjob->ji_qhdr;
+	pbs_queue *pque = find_queuebyname(pjob->ji_qs.ji_queue);
 	pbs_sched *psched;
 
 	/*
@@ -708,7 +687,7 @@ svr_setjobstate(job *pjob, int newstate, int newsubstate)
 	if (newstate == JOB_STATE_RUNNING) {
 		if (pjob->ji_etlimit_decr_queued == FALSE) {
 			account_entity_limit_usages(pjob, NULL, NULL, DECR, ETLIM_ACC_ALL_QUEUED);
-			account_entity_limit_usages(pjob, pjob->ji_qhdr, NULL, DECR, ETLIM_ACC_ALL_QUEUED);
+			account_entity_limit_usages(pjob, find_queuebyname(pjob->ji_qs.ji_queue), NULL, DECR, ETLIM_ACC_ALL_QUEUED);
 			pjob->ji_etlimit_decr_queued = TRUE;
 		}
 	}
@@ -1464,7 +1443,7 @@ svr_chkque(job *pjob, pbs_queue *pque, char *hostname, int mtype)
 	}
 
 	/* after check unset defaults & reset based on current queue, if one */
-	if (pjob->ji_qhdr) {
+	if (find_queuebyname(pjob->ji_qs.ji_queue)) {
 		clear_default_resc(pjob);
 		(void)set_resc_deflt(pjob, JOB_OBJECT, NULL);
 	}
@@ -2380,7 +2359,7 @@ set_resc_deflt(void *pobj, int objtype, pbs_queue *pque)
 			pjob = (job *)pobj;
 			assert(pjob != NULL);
 			if (pque == NULL)
-				pque = pjob->ji_qhdr;
+				pque = find_queuebyname(pjob->ji_qs.ji_queue);
 			assert(pque != NULL);
 			pdest = &pjob->ji_wattr[(int)JOB_ATR_resource];
 			psched = &pjob->ji_wattr[(int)JOB_ATR_SchedSelect];
@@ -2399,7 +2378,7 @@ set_resc_deflt(void *pobj, int objtype, pbs_queue *pque)
 			assert(presv != NULL);
 			pjob = presv->ri_jbp;
 			assert(pjob != NULL);
-			pque = pjob->ji_qhdr;
+			pque = find_queuebyname(pjob->ji_qs.ji_queue);
 			assert(pque != NULL);
 			pdest = &presv->ri_wattr[(int)RESV_ATR_resource];
 			break;
@@ -2603,9 +2582,9 @@ correct_ct(pbs_queue *pqj)
 		pjob = (job *)GET_NEXT(pjob->ji_alljobs)) {
 		server.sv_qs.sv_numjobs++;
 		server.sv_jobstates[pjob->ji_qs.ji_state]++;
-		if (pjob->ji_qhdr) {
-			(pjob->ji_qhdr)->qu_numjobs++;
-			(pjob->ji_qhdr)->qu_njstate[pjob->ji_qs.ji_state]++;
+		if (find_queuebyname(pjob->ji_qs.ji_queue)) {
+			(find_queuebyname(pjob->ji_qs.ji_queue))->qu_numjobs++;
+			(find_queuebyname(pjob->ji_qs.ji_queue))->qu_njstate[pjob->ji_qs.ji_state]++;
 		}
 	}
 	return;
@@ -5118,7 +5097,7 @@ void
 svr_histjob_update(job * pjob, int newstate, int newsubstate)
 {
 	int oldstate = pjob->ji_qs.ji_state;
-	pbs_queue *pque = pjob->ji_qhdr;
+	pbs_queue *pque = find_queuebyname(pjob->ji_qs.ji_queue);
 
 	/* update the state count in queue and server */
 	if (oldstate != newstate) {
@@ -5396,7 +5375,7 @@ svr_setjob_histinfo(job *pjob, histjob_type type)
 		(pjob->ji_qs.ji_state != JOB_STATE_FINISHED)) {
 		account_entity_limit_usages(pjob, NULL, NULL, DECR,
 				pjob->ji_etlimit_decr_queued ? ETLIM_ACC_ALL_MAX : ETLIM_ACC_ALL);
-		account_entity_limit_usages(pjob, pjob->ji_qhdr, NULL, DECR,
+		account_entity_limit_usages(pjob, find_queuebyname(pjob->ji_qs.ji_queue), NULL, DECR,
 				pjob->ji_etlimit_decr_queued ? ETLIM_ACC_ALL_MAX : ETLIM_ACC_ALL);
 	}
 

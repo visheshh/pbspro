@@ -453,9 +453,11 @@ req_quejob(struct batch_request *preq)
 	}
 #endif		/* PBS_MOM all all all all all */
 
+#ifdef PBS_MOM
 	/* does job already exist, check both old and new jobs */
 
-	if ((pj = find_job(jid)) == NULL) {
+	//NO NEED TO SEARCH DB for QUEUEJOB, SAVE WILL FAIL ANYWAY
+	if ((pj = find_job(jid)) == (job *)0) {
 		pj = (job *)GET_NEXT(svr_newjobs);
 		while (pj) {
 			if (!strcasecmp(pj->ji_qs.ji_jobid, jid))
@@ -463,6 +465,7 @@ req_quejob(struct batch_request *preq)
 			pj = (job *)GET_NEXT(pj->ji_alljobs);
 		}
 	}
+#endif
 
 #ifndef PBS_MOM		/* server server server server server server */
 	/*
@@ -474,16 +477,15 @@ req_quejob(struct batch_request *preq)
 	 * Otherwise SERVER will continue to reject queue request if job already
 	 * exists.
 	 */
-	if (pj != NULL) {
+	/* if (pj != (job *)0) { MOVE This to "if job save failed at req_commit *"
 		if ((svr_chk_history_conf()) &&
 			(pj->ji_qs.ji_state == JOB_STATE_MOVED)) {
 			job_purge(pj);
 		} else {
-			/* server rejects the queue request */
 			req_reject(PBSE_JOBEXIST, 0, preq);
 			return;
 		}
-	}
+	} */
 
 
 	/* find requested queue, is it there? */
@@ -1933,7 +1935,7 @@ req_commit(struct batch_request *preq)
 	 * to the user.
 	 */
 
-	pque = pj->ji_qhdr;
+	pque = find_queuebyname(pj->ji_qs.ji_queue);
 
 	if ((preq->rq_fromsvr == 0) &&
 		(pque->qu_qs.qu_type == QTYPE_RoutePush) &&
@@ -1951,7 +1953,7 @@ req_commit(struct batch_request *preq)
 		preq->rq_user, preq->rq_host,
 		pj->ji_wattr[(int)JOB_ATR_job_owner].at_val.at_str,
 		pj->ji_wattr[(int)JOB_ATR_jobname].at_val.at_str,
-		pj->ji_qhdr->qu_qs.qu_name);
+		pj->ji_qs.ji_queue);
 
 	/* acknowledge the request with the job id */
 	if ((rc = reply_jobid(preq, pj->ji_qs.ji_jobid, BATCH_REPLY_CHOICE_Commit))) {
@@ -1968,6 +1970,7 @@ req_commit(struct batch_request *preq)
 
 	if ((pj->ji_qs.ji_svrflags & JOB_SVFLG_HERE) == 0)
 		issue_track(pj);	/* notify creator where job is */
+
 #endif		/* PBS_SERVER */
 }
 
