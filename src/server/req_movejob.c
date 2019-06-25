@@ -194,7 +194,6 @@ req_orderjob(struct batch_request *req)
 	long	 rank;
 	int	 rc;
 	char	 tmpqn[PBS_MAXQUEUENAME+1];
-	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
 	if ((pjob1=chk_job_request(req->rq_ind.rq_move.rq_jid, req, &jt1)) == NULL)
 		return;

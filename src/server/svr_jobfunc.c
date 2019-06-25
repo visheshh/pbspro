@@ -1255,7 +1255,6 @@ int
 svr_chkque(job *pjob, pbs_queue *pque, char *hostname, int mtype)
 {
 	int i;
-	int	   rc;
 
 	/* if not already set, set up a uid/gid/name */
 

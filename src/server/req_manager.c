@@ -1814,10 +1814,7 @@ mgr_queue_set(struct batch_request *preq)
 	pbs_queue *pque;
 	char      *qname;
 	int	   rc;
-	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
-	if (pbs_db_begin_trx(conn, 0, 0) != 0)
-		goto err;
 
 	if ((*preq->rq_ind.rq_manager.rq_objname == '\0') ||
 		(*preq->rq_ind.rq_manager.rq_objname == '@')) {
@@ -1827,7 +1824,7 @@ mgr_queue_set(struct batch_request *preq)
 	} else {
 		qname   = preq->rq_ind.rq_manager.rq_objname;
 		allques = 0;
-		pque = find_queuebyname(qname, 1);
+		pque = find_queuebyname(qname, 0);
 	}
 	if (pque == NULL) {
 		req_reject(PBSE_UNKQUE, 0, preq);
@@ -1841,7 +1838,7 @@ mgr_queue_set(struct batch_request *preq)
 	log_event(PBSEVENT_ADMIN, PBS_EVENTCLASS_QUEUE, LOG_INFO,
 		qname, log_buffer);
 	if (allques)
-		pque = find_queuebyname(qname, 1);
+		pque = (pbs_queue *)GET_NEXT(svr_queues);
 
 	plist = (svrattrl *)GET_NEXT(preq->rq_ind.rq_manager.rq_attr);
 
@@ -1861,10 +1858,7 @@ mgr_queue_set(struct batch_request *preq)
 		else
 			break;
 	}
-    	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
-		goto err;
-	err:
-		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+
 	/* check the appropriateness of the attributes based on queue type */
 
 	if (allques)
