@@ -1256,7 +1256,6 @@ svr_chkque(job *pjob, pbs_queue *pque, char *hostname, int mtype)
 {
 	int i;
 	int	   rc;
-	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
 	/* if not already set, set up a uid/gid/name */
 

@@ -169,7 +169,7 @@ que_save_db(pbs_queue *pque, int mode)
 	int rc;
 	rc = 0;
 
-    rc = svr_to_db_que(pque, &dbque, savetype);
+	rc = svr_to_db_que(pque, &dbque, savetype);
 	if (rc != 0)
 		goto db_err;
 
@@ -263,7 +263,7 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 	}
 	
 	if (db_to_svr_que(pq, &dbque) != 0)
-	    goto db_err;
+		goto db_err;
 
 	pbs_db_reset_obj(&obj);
 	

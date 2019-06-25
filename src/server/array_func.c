@@ -818,8 +818,6 @@ create_subjob(job *parent, char *newjid, int *rc)
 	job 	  *subj;
 	long	   eligibletime;
 	long	    time_msec;
-	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
-
 #ifdef	WIN32
 	struct	_timeb	    tval;
 #else
@@ -937,7 +935,6 @@ create_subjob(job *parent, char *newjid, int *rc)
 	/* set the queue rank attribute */
 	subj->ji_wattr[(int)JOB_ATR_qrank].at_val.at_long = time_msec;
 	subj->ji_wattr[(int)JOB_ATR_qrank].at_flags |= ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
-		
 	if (svr_enquejob(subj) != 0) {
 		job_purge(subj);
 		*rc = PBSE_IVALREQ;
@@ -954,7 +951,6 @@ create_subjob(job *parent, char *newjid, int *rc)
 		subst_array_index(subj, tmp_path));
 
 	*rc = PBSE_NONE;
-
 	return subj;
 }
 

@@ -357,7 +357,7 @@ int pg_db_load_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock);
 /* node functions */
 int pg_db_save_node(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int savetype);
 int pg_db_load_node(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock);
-int pg_db_find_node(pbs_db_conn_t *conn, void *st, pbs_db_obj_info_t *obj, 	pbs_db_query_options_t *opts);
+int pg_db_find_node(pbs_db_conn_t *conn, void *st, pbs_db_obj_info_t *obj, pbs_db_query_options_t *opts);
 int pg_db_next_node(pbs_db_conn_t *conn, void *st, pbs_db_obj_info_t *obj);
 int pg_db_delete_node(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj);
 

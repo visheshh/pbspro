@@ -282,10 +282,6 @@ svr_recov_db(int lock)
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
 	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
 
-	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
-
-	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
-
 	/* read in job fixed sub-structure */
     rc = pbs_db_load_obj(conn, &obj, lock);
 	if (rc == -1)
