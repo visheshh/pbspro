@@ -343,7 +343,7 @@ get_dfltque(void)
 	pbs_queue *pq = NULL;
 
 	if (server.sv_attr[SRV_ATR_dflt_que].at_flags & ATR_VFLAG_SET)
-		pq = find_queuebyname(server.sv_attr[SRV_ATR_dflt_que].at_val.at_str, 1);
+		pq = find_queuebyname(server.sv_attr[SRV_ATR_dflt_que].at_val.at_str, 0);
 	return (pq);
 }
 

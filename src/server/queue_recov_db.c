@@ -220,11 +220,13 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 	int rc;
 	int		 i;
+	int oldque;
 	attribute	*pattr;
 	attribute_def	*pdef;
 
 	obj.pbs_db_obj_type = PBS_DB_QUEUE;
 	obj.pbs_db_un.pbs_db_que = &dbque;
+	oldque = 1;
 
 	/* load server_qs */
 	dbque.qu_name[sizeof(dbque.qu_name) - 1] = '\0';
@@ -236,18 +238,10 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 
 	if (!pq) {
 		pq = que_alloc(qname);  /* allocate & init queue structure space */
+		oldque = 0;
 		if (pq == NULL) {
 			log_err(-1, "que_recov", "que_alloc failed");
 			return NULL;
-		}
-	} else {
-		/* remove any malloc working attribute space */
-
-		for (i=0; i < (int)QA_ATR_LAST; i++) {
-			pdef  = &que_attr_def[i];
-			pattr = &pq->qu_attr[i];
-
-			pdef->at_free(pattr);
 		}
 	}
 
@@ -260,6 +254,17 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 
 	if (rc == -2){
 		return pq;
+	}
+
+	if (oldque){
+			/* remove any malloc working attribute space */
+
+		for (i=0; i < (int)QA_ATR_LAST; i++) {
+			pdef  = &que_attr_def[i];
+			pattr = &pq->qu_attr[i];
+
+			pdef->at_free(pattr);
+		}
 	}
 	
 	if (db_to_svr_que(pq, &dbque) != 0)

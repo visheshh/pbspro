@@ -489,15 +489,12 @@ req_quejob(struct batch_request *preq)
 
 	/* find requested queue, is it there? */
 
-	if (pbs_db_begin_trx(conn_db, 0, 0) != 0)
-		goto err;
-
 	qname = preq->rq_ind.rq_queuejob.rq_destin;
 	if ((*qname == '\0') || (*qname == '@')) {  /* use default queue */
 		pque = get_dfltque();
 		rc   = PBSE_QUENODFLT;
 	} else { 		/* else find the named queue */
-		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin, 1);
+		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin, 0);
 #ifdef NAS /* localmod 075 */
 		if (pque == NULL)
 			pque = find_resvqueuebyname(qname);
@@ -998,23 +995,6 @@ req_quejob(struct batch_request *preq)
 	}
 
 	/*
-	 * See if the job is qualified to go into the requested queue.
-	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
-	 *
-	 * svr_chkque is called way down here because it needs to have the
-	 * job structure and attributes already set up.
-	 */
-
-	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
-	if (rc) {
-		if (pj->ji_clterrmsg)
-			reply_text(preq, rc, pj->ji_clterrmsg);
-		else
-			req_reject(rc, 0, preq);
-		job_purge(pj);
-		return;
-	}
-	/*
 	 * if single, signon password scheme is in place, only allow submission
 	 * if a per user per server password exists.
 	 *
@@ -1042,7 +1022,6 @@ req_quejob(struct batch_request *preq)
 				return;
 			}
 	}
-
 
 	(void)strcpy(pj->ji_qs.ji_queue, pque->qu_qs.qu_name);
 
@@ -1080,7 +1059,7 @@ req_quejob(struct batch_request *preq)
 			}
 		}
 	}
-
+	
 	pj->ji_wattr[(int)JOB_ATR_substate].at_val.at_long =
 		JOB_SUBSTATE_TRANSIN;
 	pj->ji_wattr[(int)JOB_ATR_substate].at_flags |=
@@ -1134,7 +1113,6 @@ req_quejob(struct batch_request *preq)
 	pj->ji_qs.ji_un.ji_newt.ji_fromsock = sock;
 	pj->ji_qs.ji_un.ji_newt.ji_scriptsz = 0;
 
-	que_save_db(pque, QUE_SAVE_FULL);
 
 
 #endif		/* not PBS_MOM */
@@ -1276,11 +1254,6 @@ req_quejob(struct batch_request *preq)
 
 		}
 	}
-
-	if (pbs_db_end_trx(conn_db, PBS_DB_COMMIT) != 0)
-		goto err;
-	err:
-		(void) pbs_db_end_trx(conn_db, PBS_DB_ROLLBACK);
 
 #endif	/* not PBS_MOM */
 }
@@ -1872,11 +1845,34 @@ req_commit(struct batch_request *preq)
 
 	pbs_db_begin_trx(conn, 0, 0);
 
+	/*
+	 * See if the job is qualified to go into the requested queue.
+	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
+	 *
+	 * svr_chkque is called way down here because it needs to have the
+	 * job structure and attributes already set up.
+	 */
+
+	pque = find_queuebyname(pj->ji_qs.ji_queue, 1);
+	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
+	if (rc) {
+		if (pj->ji_clterrmsg)
+			reply_text(preq, rc, pj->ji_clterrmsg);
+		else
+			req_reject(rc, 0, preq);
+		job_purge(pj);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return;
+	}
+
 	if ((rc = svr_enquejob(pj)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
+
+	que_save_db(pque, QUE_SAVE_FULL);
 
 	if (pj->ji_resvp) {
 		/*we are supposedly dealing with a reservation job:
@@ -1897,6 +1893,7 @@ req_commit(struct batch_request *preq)
 		if (presv == NULL) {
 			(void)job_purge(pj);
 			req_reject(PBSE_SYSTEM, 0, preq);
+			(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 			return;
 		}
 		delete_link(&presv->ri_allresvs);
