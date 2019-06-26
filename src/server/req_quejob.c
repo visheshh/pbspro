@@ -997,8 +997,6 @@ req_quejob(struct batch_request *preq)
 		}
 	}
 
-
-
 	/*
 	 * See if the job is qualified to go into the requested queue.
 	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
@@ -1016,12 +1014,6 @@ req_quejob(struct batch_request *preq)
 		job_purge(pj);
 		return;
 	}
-
-	que_save_db(pque, QUE_SAVE_FULL);
-	if (pbs_db_end_trx(conn_db, PBS_DB_COMMIT) != 0)
-		goto err;
-	err:
-		(void) pbs_db_end_trx(conn_db, PBS_DB_ROLLBACK);
 	/*
 	 * if single, signon password scheme is in place, only allow submission
 	 * if a per user per server password exists.
@@ -1129,8 +1121,6 @@ req_quejob(struct batch_request *preq)
 		}
 	}
 
-#endif		/* not PBS_MOM */
-
 	/* set remaining job structure elements			*/
 
 	pj->ji_qs.ji_state =    JOB_STATE_TRANSIT;
@@ -1138,13 +1128,16 @@ req_quejob(struct batch_request *preq)
 	pj->ji_wattr[(int)JOB_ATR_state].at_val.at_char = 'T';
 
 	pj->ji_wattr[(int)JOB_ATR_mtime].at_val.at_long = (long)time_now;
-	pj->ji_wattr[(int)JOB_ATR_mtime].at_flags |=
-		ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
+	pj->ji_wattr[(int)JOB_ATR_mtime].at_flags |= ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
 
 	pj->ji_qs.ji_un_type = JOB_UNION_TYPE_NEW;
 	pj->ji_qs.ji_un.ji_newt.ji_fromsock = sock;
 	pj->ji_qs.ji_un.ji_newt.ji_scriptsz = 0;
 
+	que_save_db(pque, QUE_SAVE_FULL);
+
+
+#endif		/* not PBS_MOM */
 
 #ifdef PBS_MOM
 	mom_hook_input_init(&hook_input);
@@ -1283,6 +1276,11 @@ req_quejob(struct batch_request *preq)
 
 		}
 	}
+
+	if (pbs_db_end_trx(conn_db, PBS_DB_COMMIT) != 0)
+		goto err;
+	err:
+		(void) pbs_db_end_trx(conn_db, PBS_DB_ROLLBACK);
 
 #endif	/* not PBS_MOM */
 }
