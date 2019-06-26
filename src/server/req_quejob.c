@@ -1814,6 +1814,10 @@ req_commit(struct batch_request *preq)
 		return;
 	}
 
+
+	pbs_db_begin_trx(conn, 0, 0);
+
+	svr_recov_db(1);
 	/* Set Server level entity usage */
 
 	if ((rc = account_entity_limit_usages(pj, NULL, NULL, INCR, ETLIM_ACC_ALL)) != 0) {
@@ -1842,9 +1846,6 @@ req_commit(struct batch_request *preq)
 	pj->ji_wattr[(int)JOB_ATR_qrank].at_flags |=
 		ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
 
-
-	pbs_db_begin_trx(conn, 0, 0);
-
 	/*
 	 * See if the job is qualified to go into the requested queue.
 	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
@@ -1872,6 +1873,7 @@ req_commit(struct batch_request *preq)
 		return;
 	}
 
+	svr_save_db(&server, SVR_SAVE_FULL);
 	que_save_db(pque, QUE_SAVE_FULL);
 
 	if (pj->ji_resvp) {
