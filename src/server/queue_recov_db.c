@@ -240,6 +240,15 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 			log_err(-1, "que_recov", "que_alloc failed");
 			return NULL;
 		}
+	} else {
+		/* remove any malloc working attribute space */
+
+		for (i=0; i < (int)QA_ATR_LAST; i++) {
+			pdef  = &que_attr_def[i];
+			pattr = &pq->qu_attr[i];
+
+			pdef->at_free(pattr);
+		}
 	}
 
 	/* read in job fixed sub-structure */
@@ -251,15 +260,6 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 
 	if (rc == -2){
 		return pq;
-	}
-
-	/* remove any malloc working attribute space */
-
-	for (i=0; i < (int)QA_ATR_LAST; i++) {
-		pdef  = &que_attr_def[i];
-		pattr = &pq->qu_attr[i];
-
-		pdef->at_free(pattr);
 	}
 	
 	if (db_to_svr_que(pq, &dbque) != 0)

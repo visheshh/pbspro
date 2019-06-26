@@ -292,14 +292,13 @@ svr_recov_db(int lock)
  
  	/* free all the svr attributes */
 
-	if (lock) {
+	if (&server != NULL) {
+		for (i=0; i < (int)SRV_ATR_LAST; i++) {
+			pdef  = &svr_attr_def[i];
+			pattr = &server.sv_attr[i];
 
-	for (i=0; i < (int)SRV_ATR_LAST; i++) {
-		pdef  = &svr_attr_def[i];
-		pattr = &server.sv_attr[i];
-
-		pdef->at_free(pattr);
-	}
+			pdef->at_free(pattr);
+		}
 	}
 
 	if (db_to_svr_svr(&server, &dbsvr) != 0)

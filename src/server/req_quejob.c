@@ -341,9 +341,6 @@ req_quejob(struct batch_request *preq)
 		return;
 	}
 
-	if (pbs_db_begin_trx(conn_db, 0, 0) != 0)
-		goto err;
-
 	psatl = (svrattrl *)GET_NEXT(preq->rq_ind.rq_queuejob.rq_attr);
 	while (psatl) {
 		if (psatl->al_name == NULL || (!strcasecmp(psatl->al_name, ATTR_l) && psatl->al_resc == NULL)) {
@@ -491,6 +488,9 @@ req_quejob(struct batch_request *preq)
 	} */
 
 	/* find requested queue, is it there? */
+
+	if (pbs_db_begin_trx(conn_db, 0, 0) != 0)
+		goto err;
 
 	qname = preq->rq_ind.rq_queuejob.rq_destin;
 	if ((*qname == '\0') || (*qname == '@')) {  /* use default queue */
@@ -996,6 +996,8 @@ req_quejob(struct batch_request *preq)
 			return;
 		}
 	}
+
+
 
 	/*
 	 * See if the job is qualified to go into the requested queue.
