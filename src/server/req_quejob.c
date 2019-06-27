@@ -309,7 +309,6 @@ req_quejob(struct batch_request *preq)
 	resource_def	*prdefplc;
 	resource	*presc;
 	conn_t		*conn;
-	pbs_db_conn_t *conn_db = svr_db_conn;
 #else
 	mom_hook_input_t  hook_input;
 	mom_hook_output_t hook_output;

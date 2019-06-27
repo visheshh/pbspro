@@ -307,7 +307,6 @@ svr_recov_db(int lock)
 	return (0);
 
 db_err:
-	log_err(-1, "svr_recov", "read of svrdb failed");
 	return -1;
 }
 
