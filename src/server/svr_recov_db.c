@@ -273,6 +273,7 @@ svr_recov_db(int lock)
 	int		 i;
 	attribute	*pattr;
 	attribute_def	*pdef;
+	static int firsttime = 1;
 
 	/* load server_qs */
 	dbsvr.attr_list.attr_count = 0;
@@ -280,7 +281,13 @@ svr_recov_db(int lock)
 
 	obj.pbs_db_obj_type = PBS_DB_SVR;
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
-	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+
+	if (firsttime) {
+		dbsvr.sv_savetm = 0;
+		firsttime = 0;
+	} else {
+		dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+	}
 
 	/* read in job fixed sub-structure */
     rc = pbs_db_load_obj(conn, &obj, lock);
