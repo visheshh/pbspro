@@ -1814,9 +1814,6 @@ req_commit(struct batch_request *preq)
 	}
 
 
-	pbs_db_begin_trx(conn, 0, 0);
-
-	svr_recov_db(1);
 	/* Set Server level entity usage */
 
 	if ((rc = account_entity_limit_usages(pj, NULL, NULL, INCR, ETLIM_ACC_ALL)) != 0) {
@@ -1852,6 +1849,9 @@ req_commit(struct batch_request *preq)
 	 * svr_chkque is called way down here because it needs to have the
 	 * job structure and attributes already set up.
 	 */
+
+
+	pbs_db_begin_trx(conn, 0, 0);
 
 	pque = find_queuebyname(pj->ji_qs.ji_queue, 1);
 	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
