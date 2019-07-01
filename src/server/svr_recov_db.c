@@ -195,6 +195,8 @@ db_to_svr_svr(struct server *ps, pbs_db_svr_info_t *pdbsvr)
 		(int) SRV_ATR_LAST, 0)) != 0)
 		return -1;
 
+	ps->sv_attr[(int)SRV_ATR_State].at_val.at_long = SV_STATE_RUN;
+
 	return 0;
 }
 
