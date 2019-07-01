@@ -431,11 +431,11 @@ req_quejob(struct batch_request *preq)
 		}
 		created_here = JOB_SVFLG_HERE;
 		if (i == 0) {	/* Normal job */
-			(void)sprintf(jidbuf, "%lld.%s",
-				next_svr_sequence_id, server_name);
+			(void)sprintf(jidbuf, "%lld.%s_%d",
+				next_svr_sequence_id, server_name, pbs_conf.batch_service_port);
 		} else {	/* Array Job */
-			(void)sprintf(jidbuf, "%lld[].%s",
-					next_svr_sequence_id, server_name);
+			(void)sprintf(jidbuf, "%lld[].%s_%d",
+					next_svr_sequence_id, server_name, pbs_conf.batch_service_port);
 		}
 		jid = jidbuf;
 	}
@@ -1815,8 +1815,8 @@ req_commit(struct batch_request *preq)
 	}
 
 
-	//pbs_db_begin_trx(conn, 0, 0);
-	//rc = svr_recov_db(1);
+	pbs_db_begin_trx(conn, 0, 0);
+	rc = svr_recov_db(1);
 
 	/* Set Server level entity usage */
 
@@ -1826,13 +1826,6 @@ req_commit(struct batch_request *preq)
 		//(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
-	/* 
-	svr_save_db(&server, SVR_SAVE_FULL);
-	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0) {
-		job_purge(pj);
-		req_reject(PBSE_SYSTEM, 0, preq);
-		return;
-	} */
 
 	/* remove job for the server new job list, set state, and enqueue it */
 
@@ -1862,7 +1855,7 @@ req_commit(struct batch_request *preq)
 	 * job structure and attributes already set up.
 	 */
 
-	pbs_db_begin_trx(conn, 0, 0);
+	//pbs_db_begin_trx(conn, 0, 0);
 	pque = find_queuebyname(pj->ji_qs.ji_queue, 1);
 	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
 	if (rc) {
@@ -1881,7 +1874,7 @@ req_commit(struct batch_request *preq)
 		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
-	//svr_save_db(&server, SVR_SAVE_FULL);
+	svr_save_db(&server, SVR_SAVE_FULL);
 	que_save_db(pque, QUE_SAVE_FULL);
 	/*
 		if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0) {
@@ -3225,7 +3218,6 @@ static
 long long get_next_svr_sequence_id(void)
 {
 	long long ret_svr_sequence_id = 0;
-
 	/* JobId's save to the database after every 1000 jobs */
 	if (svr_sequence_window_count == 0) {
 		/* Save the job-id numbers in the database by a SEQ_WIN_INCR(1000) in advance.

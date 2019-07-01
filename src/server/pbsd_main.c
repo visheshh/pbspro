@@ -1031,8 +1031,7 @@ main(int argc, char **argv)
 		return (-1);
 	}
 
-	(void)strcpy(daemonname, "Server@");
-	(void)strcat(daemonname, server_host);
+	sprintf(daemonname, "Server@%s_%d", server_host, pbs_conf.batch_service_port);
 	if ((pc = strchr(daemonname, (int)'.')) != NULL)
 		*pc = '\0';
 
@@ -1955,6 +1954,8 @@ try_db_again:
 		*state = SV_STATE_HOT;
 	else
 		*state = SV_STATE_RUN;
+
+	svr_save_db(&server, SVR_SAVE_FULL);
 
 
 	/* Can start the python interpreter this late, before the main loop,*/
