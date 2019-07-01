@@ -1099,6 +1099,10 @@ req_quejob(struct batch_request *preq)
 		}
 	}
 
+
+#endif		/* not PBS_MOM */
+
+
 	/* set remaining job structure elements			*/
 
 	pj->ji_qs.ji_state =    JOB_STATE_TRANSIT;
@@ -1112,9 +1116,6 @@ req_quejob(struct batch_request *preq)
 	pj->ji_qs.ji_un.ji_newt.ji_fromsock = sock;
 	pj->ji_qs.ji_un.ji_newt.ji_scriptsz = 0;
 
-
-
-#endif		/* not PBS_MOM */
 
 #ifdef PBS_MOM
 	mom_hook_input_init(&hook_input);
@@ -1814,13 +1815,24 @@ req_commit(struct batch_request *preq)
 	}
 
 
+	//pbs_db_begin_trx(conn, 0, 0);
+	//rc = svr_recov_db(1);
+
 	/* Set Server level entity usage */
 
 	if ((rc = account_entity_limit_usages(pj, NULL, NULL, INCR, ETLIM_ACC_ALL)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
+		//(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
+	/* 
+	svr_save_db(&server, SVR_SAVE_FULL);
+	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0) {
+		job_purge(pj);
+		req_reject(PBSE_SYSTEM, 0, preq);
+		return;
+	} */
 
 	/* remove job for the server new job list, set state, and enqueue it */
 
@@ -1850,9 +1862,7 @@ req_commit(struct batch_request *preq)
 	 * job structure and attributes already set up.
 	 */
 
-
 	pbs_db_begin_trx(conn, 0, 0);
-
 	pque = find_queuebyname(pj->ji_qs.ji_queue, 1);
 	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
 	if (rc) {
@@ -1871,9 +1881,14 @@ req_commit(struct batch_request *preq)
 		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
-
-	svr_save_db(&server, SVR_SAVE_FULL);
+	//svr_save_db(&server, SVR_SAVE_FULL);
 	que_save_db(pque, QUE_SAVE_FULL);
+	/*
+		if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0) {
+		job_purge(pj);
+		req_reject(PBSE_SYSTEM, 0, preq);
+		return;
+		} */
 
 	if (pj->ji_resvp) {
 		/*we are supposedly dealing with a reservation job:
@@ -1902,7 +1917,7 @@ req_commit(struct batch_request *preq)
 		set_scheduler_flag(SCH_SCHEDULE_NEW, dflt_scheduler);
 		Update_Resvstate_if_resv(pj);
 	}
-
+	//pbs_db_begin_trx(conn, 0, 0);
 	/* save job and job script within single transaction */
 
 	/* Make things faster by writing job only once here  - at commit time */
@@ -1945,7 +1960,7 @@ req_commit(struct batch_request *preq)
 	 * to the user.
 	 */
 
-	pque = find_queuebyname(pj->ji_qs.ji_queue, 0);
+	//pque = find_queuebyname(pj->ji_qs.ji_queue, 0); Need to check
 
 	if ((preq->rq_fromsvr == 0) &&
 		(pque->qu_qs.qu_type == QTYPE_RoutePush) &&

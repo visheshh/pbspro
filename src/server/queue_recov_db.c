@@ -271,7 +271,9 @@ que_recov_db(char *qname, pbs_queue *pq, int lock)
 		goto db_err;
 
 	pbs_db_reset_obj(&obj);
-
+	if (pq)
+		log_err(-1, "que_recov", "pq returned successfully");
+	
 	/* all done recovering the queue */
 	return (pq);
 
