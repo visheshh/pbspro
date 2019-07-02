@@ -117,6 +117,7 @@ get_server(char *job_id_in, char *job_id_out, char *server_out)
 	char *parent_server = NULL;
 	char *current_server = NULL;
 	char host_server[PBS_MAXSERVERNAME+1];
+	char serverwport[PBS_MAXSERVERNAME+6];
 
 	if (!job_id_in || !job_id_out || !server_out)
 		return 1;
@@ -147,12 +148,11 @@ get_server(char *job_id_in, char *job_id_out, char *server_out)
 	free(seq_number);
 
 	if (notNULL(parent_server)) {
-
 		/* If parent_server matches PBS_SERVER then use it */
 		if (pbs_conf.pbs_server_name) {
-			if (strcasecmp(parent_server, pbs_conf.pbs_server_name) == 0) {
-				strcat(job_id_out, ".");
-				strcat(job_id_out, pbs_conf.pbs_server_name);
+			sprintf(serverwport,"%s_%d", pbs_conf.pbs_server_name, pbs_conf.batch_service_port);
+			if (strcasecmp(parent_server, serverwport) == 0) {
+				sprintf(job_id_out,"%s.%s_%d", job_id_out, pbs_conf.pbs_server_name, pbs_conf.batch_service_port);
 				free(parent_server);
 				return 0;
 			}
@@ -180,8 +180,7 @@ get_server(char *job_id_in, char *job_id_out, char *server_out)
 	free(parent_server);
 
 	if (pbs_conf.pbs_server_name) {
-		strcat(job_id_out, ".");
-		strcat(job_id_out, pbs_conf.pbs_server_name);
+		sprintf(job_id_out,"%s.%s_%d", job_id_out, pbs_conf.pbs_server_name, pbs_conf.batch_service_port);
 	} else {
 		return 1;
 	}
