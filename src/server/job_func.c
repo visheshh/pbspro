@@ -989,7 +989,21 @@ job_purge(job *pjob)
 
 /**
  * @brief
- * 		find_job() - find job by jobid
+ * 		wrapper function to call find_job_avl
+ *
+ * @param[in]	jobid - job ID string.
+ *
+ * @return	pointer to job struct
+ * @retval NULL	- if job by jobid not found.
+ */
+job *
+find_job(char *jobid) {
+	return(find_job_avl(jobid));
+}
+
+/**
+ * @brief
+ * 		find_job_avl() - find job by jobid
  *
  *		Search list of all server jobs for one with same job id
  *		Return NULL if not found or pointer to job struct if found.
@@ -1009,7 +1023,7 @@ job_purge(job *pjob)
  */
 
 job *
-find_job(char *jobid)
+find_job_avl(char *jobid)
 {
 #ifndef PBS_MOM
 	size_t len;

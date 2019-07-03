@@ -113,9 +113,14 @@ extern int status_nodeattrib(svrattrl *, attribute_def *, struct pbsnode *,
 extern int svr_chk_histjob(job *);
 
 
+
+
 /* Private Data Definitions */
 
 static int bad;
+/*-------for stat server----------*/
+static time_t from_time; /* Timestamp at update of qstat cache */
+job *refresh_job(char *);
 
 /* The following private support functions are included */
 
@@ -123,6 +128,8 @@ static int status_que(pbs_queue *, struct batch_request *, pbs_list_head *);
 static int status_node(struct pbsnode *, struct batch_request *, pbs_list_head *);
 static int status_resv(resc_resv *, struct batch_request *, pbs_list_head *);
 extern pbs_sched *find_scheduler(char *sched_name);
+static int get_all_db_jobs();
+
 /**
  * @brief
  * 		Support function for req_stat_job() and stat_a_jobidname().
@@ -298,6 +305,7 @@ void req_stat_job(struct batch_request *preq)
 	int		    rc   = 0;
 	int		    type = 0;
 	char		   *pnxtjid = NULL;
+	int db_rc = 0;
 
 	/* check for any extended flag in the batch request. 't' for
 	 * the sub jobs. If 'x' is there, then check if the server is
@@ -305,6 +313,13 @@ void req_stat_job(struct batch_request *preq)
 	 * return with PBSE_JOBHISTNOTSET error. Otherwise select history
 	 * jobs.
 	 */
+
+	/*---------for stat server-----------*/
+	db_rc = get_all_db_jobs();
+	if (db_rc)
+		req_reject(db_rc, bad, preq);
+	/*--------------------------------*/
+
 	if (preq->rq_extend) {
 		if (strchr(preq->rq_extend, (int)'t'))
 			dosubjobs = 1;	/* status sub jobs of an Array Job */
@@ -389,15 +404,71 @@ void req_stat_job(struct batch_request *preq)
 			rc = do_stat_of_a_job(preq, pjob, dohistjobs, dosubjobs);
 			pjob = (job *)GET_NEXT(pjob->ji_alljobs);
 		}
-
 	}
-
 	if (rc && (rc != PBSE_PERM))
 		req_reject(rc, bad, preq);
 	else
 		reply_send(preq);
 }
 
+/**
+ * @brief
+ * 		Get all the jobs from database which are changed after given time.
+ *
+ * @param[in]	from_time	-	time in epoch seconds
+ *
+ * @return	0 - success
+ * 			1 - fail/error
+ */
+
+static int
+get_all_db_jobs() {
+
+	job		*pj = NULL;
+	pbs_db_job_info_t dbjob;
+	pbs_db_obj_info_t obj;
+	pbs_db_conn_t *conn = svr_db_conn;
+	void		*state = NULL;
+	int		    rc_cur = 0;
+	pbs_db_query_options_t opts;
+
+	if (pbs_db_begin_trx(conn, 0, 0) !=0) {
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return (1);
+	}
+
+	opts.timestamp = from_time;
+	obj.pbs_db_obj_type = PBS_DB_JOB;
+	obj.pbs_db_un.pbs_db_job = &dbjob;
+	state = pbs_db_cursor_init(conn, &obj, &opts);
+
+	if (state == NULL) {
+		sprintf(log_buffer, "%s", (char *) conn->conn_db_err);
+		log_err(-1, __func__, log_buffer);
+		pbs_db_cursor_close(conn, state);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return (1);
+	}
+	/* load jobs from db */
+	while ((rc_cur = pbs_db_cursor_next(conn, state, &obj)) == 0) {
+		if (dbjob.ji_savetm > from_time) {
+			from_time = dbjob.ji_savetm;
+		}
+		if ((pj = refresh_job(dbjob.ji_jobid)) == NULL) {
+				sprintf(log_buffer, "Failed to refresh job %s", dbjob.ji_jobid);
+				log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, LOG_NOTICE,
+						msg_daemonname, log_buffer);
+			continue;
+		}
+		pbs_db_reset_obj(&obj);
+	} /* END while */
+
+	/* close the connection */
+	pbs_db_cursor_close(conn, state);
+	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
+		return (1);
+	return 0;
+}
 
 /**
  * @brief

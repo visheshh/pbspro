@@ -455,7 +455,6 @@ req_quejob(struct batch_request *preq)
 
 #ifdef PBS_MOM
 	/* does job already exist, check both old and new jobs */
-
 	//NO NEED TO SEARCH DB for QUEUEJOB, SAVE WILL FAIL ANYWAY
 	if ((pj = find_job(jid)) == (job *)0) {
 		pj = (job *)GET_NEXT(svr_newjobs);

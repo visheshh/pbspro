@@ -159,7 +159,7 @@ static void running_jobs_count(struct work_task *);
 
 
 /** For faster job lookup through AVL tree */
-static void svr_avljob_oper(job *pjob, int delkey);
+void svr_avljob_oper(job *pjob, int delkey);
 
 /* Global Data Items: */
 extern char *msg_noloopbackif;
@@ -270,7 +270,6 @@ svr_enquejob(job *pjob)
 
 	pque = find_queuebyname(pjob->ji_qs.ji_queue);
 	if (pque == NULL) {
-//SHRINI_THOUGHTS: removed as no point in caching history jobs
 			return (PBSE_UNKQUE);
 	}
 
@@ -5511,7 +5510,7 @@ svr_avlkey_create(const char *keystr)
  *		MT-unsafe
  *
  */
-static void
+void
 svr_avljob_oper(job *pjob, int delkey)
 {
 	int rc = AVL_IX_OK;

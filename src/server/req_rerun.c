@@ -102,7 +102,6 @@ post_rerun(struct work_task *pwt)
 	struct batch_request *preq;
 
 	preq = (struct batch_request *)pwt->wt_parm1;
-
 	if (preq->rq_reply.brp_code != 0) {
 		if ((pjob = find_job(preq->rq_ind.rq_signal.rq_jid)) != NULL) {
 			(void)sprintf(log_buffer, "rerun signal reject by mom: %d",
