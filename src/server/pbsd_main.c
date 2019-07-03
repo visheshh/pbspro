@@ -1955,7 +1955,7 @@ try_db_again:
 	else
 		*state = SV_STATE_RUN;
 
-	svr_save_db(&server, SVR_SAVE_FULL);
+	//svr_save_db(&server, SVR_SAVE_FULL);
 
 
 	/* Can start the python interpreter this late, before the main loop,*/

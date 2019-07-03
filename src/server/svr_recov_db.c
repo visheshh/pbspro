@@ -195,7 +195,7 @@ db_to_svr_svr(struct server *ps, pbs_db_svr_info_t *pdbsvr)
 		(int) SRV_ATR_LAST, 0)) != 0)
 		return -1;
 
-	ps->sv_attr[(int)SRV_ATR_State].at_val.at_long = SV_STATE_RUN;
+	//ps->sv_attr[(int)SRV_ATR_State].at_val.at_long = SV_STATE_RUN;
 
 	return 0;
 }
@@ -305,7 +305,7 @@ svr_recov_db(int lock)
  
  	/* free all the svr attributes */
 
-	for (i=0; i < (int)SRV_ATR_LAST; i++) {
+	for (i=1; i < (int)SRV_ATR_LAST; i++) {
 		pdef  = &svr_attr_def[i];
 		pattr = &server.sv_attr[i];
 
