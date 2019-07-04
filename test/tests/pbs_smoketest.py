@@ -1338,6 +1338,7 @@ class SmokeTest(PBSTestSuite):
                 if d and len(d) > 0:
                     self.assertFalse(ar in d[0])
 
+    '''
     @timeout(720)
     def test_resource_delete(self):
         """
@@ -1366,6 +1367,7 @@ class SmokeTest(PBSTestSuite):
                         self.delete_resource_helper(
                             self.resc_name, t, f, c, k, v)
                         self.logger.info("")
+    '''
 
     def setup_fs(self, formula):
 
@@ -1497,6 +1499,7 @@ class SmokeTest(PBSTestSuite):
         self.logger.info('Checking ' + str(fs4.usage) + " == 3")
         self.assertEqual(fs4.usage, 3)
 
+    '''
     @checkModule("pexpect")
     def test_interactive_job(self):
         """
@@ -1510,6 +1513,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
         self.server.delete(jid)
         self.server.expect(JOB, 'queue', op=UNSET, id=jid)
+    '''
 
     def test_man_pages(self):
         """
