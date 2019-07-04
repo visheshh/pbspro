@@ -294,9 +294,6 @@ svr_recov_db(int lock)
 	/* read in job fixed sub-structure */
     rc = pbs_db_load_obj(conn, &obj, lock);
 
-	sprintf(log_buffer, "firsttime = %d, rc = %d", firsttime, rc);
-	log_err(-1, __func__, log_buffer);
-
 	if (rc == -1)
 		goto db_err;
 
@@ -320,7 +317,6 @@ svr_recov_db(int lock)
 	return (0);
 
 db_err:
-	log_err(-1, __func__, "Failed to save svr");
 	return -1;
 }
 

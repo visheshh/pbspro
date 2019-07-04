@@ -1823,7 +1823,7 @@ req_commit(struct batch_request *preq)
 	if ((rc = account_entity_limit_usages(pj, NULL, NULL, INCR, ETLIM_ACC_ALL)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
-		//(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
 
