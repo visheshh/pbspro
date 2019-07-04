@@ -250,6 +250,7 @@ local_move(job *jobp, struct batch_request *req)
 			destination);
 		log_err(-1, __func__, log_buffer);
 		pbs_errno = PBSE_UNKQUE;
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return -1;
 	}
 
@@ -273,6 +274,7 @@ local_move(job *jobp, struct batch_request *req)
 
 	if (pbs_errno) {
 		/* should this queue be retried? */
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return (should_retry_route(pbs_errno));
 	}
 
@@ -312,13 +314,16 @@ local_move(job *jobp, struct batch_request *req)
 	}
 
 
-	if ((pbs_errno = svr_enquejob(jobp)) != 0)
+	if ((pbs_errno = svr_enquejob(jobp)) != 0){
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return -1;		/* should never ever get here */
-
+	}
 	jobp->ji_lastdest = 0;	/* reset in case of another route */
 
 	(void)job_save(jobp, SAVEJOB_FULL);
+	//job_save_db(jobp, SAVEJOB_FULL);
 	que_save_db(qp, QUE_SAVE_FULL);
+	svr_save_db(&server, SVR_SAVE_FULL);
 
 	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
 		goto err;
