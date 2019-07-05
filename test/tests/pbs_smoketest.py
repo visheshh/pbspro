@@ -241,6 +241,7 @@ class SmokeTest(PBSTestSuite):
         jid2 = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid2)
 
+    '''
     def test_hold_release(self):
         """
         Test to hold and release a job
@@ -253,6 +254,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'Hold_Types': 'u'}, jid)
         self.server.rlsjob(jid, USER_HOLD)
         self.server.expect(JOB, {'Hold_Types': 'n'}, jid)
+    '''
 
     @skipOnCpuSet
     def test_create_vnode(self):
@@ -417,6 +419,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'job_state': 'R'}, id=j2id)
         self.server.expect(JOB, {'job_state': 'S'}, id=jid)
 
+    '''
     @skipOnCpuSet
     def test_preemption_qrun(self):
         """
@@ -438,6 +441,7 @@ class SmokeTest(PBSTestSuite):
 
         self.server.expect(JOB, {ATTR_state: 'S'}, id=jid1)
         self.server.expect(JOB, {ATTR_state: 'R'}, id=jid2)
+    '''
 
     @skipOnCpuSet
     def test_fairshare(self):
