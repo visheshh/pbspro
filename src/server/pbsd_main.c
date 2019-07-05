@@ -1031,8 +1031,7 @@ main(int argc, char **argv)
 		return (-1);
 	}
 
-	(void)strcpy(daemonname, "Server@");
-	(void)strcat(daemonname, server_host);
+	sprintf(daemonname, "Server@%s_%d", server_host, pbs_conf.batch_service_port);
 	if ((pc = strchr(daemonname, (int)'.')) != NULL)
 		*pc = '\0';
 
@@ -1949,12 +1948,14 @@ try_db_again:
 	 * Now at last, we are read to do some batch work, the
 	 * following section constitutes the "main" loop of the server
 	 */
-
+	svr_recov_db(0);
 	state  = &server.sv_attr[(int)SRV_ATR_State].at_val.at_long;
 	if (server_init_type == RECOV_HOT)
 		*state = SV_STATE_HOT;
 	else
 		*state = SV_STATE_RUN;
+
+	//svr_save_db(&server, SVR_SAVE_FULL);
 
 
 	/* Can start the python interpreter this late, before the main loop,*/
@@ -2161,7 +2162,7 @@ try_db_again:
 	DBPRT(("Server out of main loop, state is %ld\n", *state))
 
 	svr_save_db(&server, SVR_SAVE_FULL);	/* final recording of server */
-	track_save(NULL);	/* save tracking data	     */
+	track_save(NULL);	/* save tracking data*/
 
 	/* save any jobs that need saving */
 	for (pjob = (job *)GET_NEXT(svr_alljobs);

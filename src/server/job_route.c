@@ -275,11 +275,11 @@ job_route(job *jobp)
 			break;			/* ok to try */
 
 		case JOB_STATE_HELD:
-			bad_state = !find_queuebyname(jobp->ji_qs.ji_queue)->qu_attr[QR_ATR_RouteHeld].at_val.at_long;
+			bad_state = !find_queuebyname(jobp->ji_qs.ji_queue, 0)->qu_attr[QR_ATR_RouteHeld].at_val.at_long;
 			break;
 
 		case JOB_STATE_WAITING:
-			bad_state = !find_queuebyname(jobp->ji_qs.ji_queue)->qu_attr[QR_ATR_RouteWaiting].at_val.at_long;
+			bad_state = !find_queuebyname(jobp->ji_qs.ji_queue, 0)->qu_attr[QR_ATR_RouteWaiting].at_val.at_long;
 			break;
 
 		case JOB_STATE_MOVED:
@@ -302,7 +302,7 @@ job_route(job *jobp)
 
 	/* check the queue limits, can we route any (more) */
 
-	qp = find_queuebyname(jobp->ji_qs.ji_queue);
+	qp = find_queuebyname(jobp->ji_qs.ji_queue, 0);
 	if (qp->qu_attr[(int)QA_ATR_Started].at_val.at_long == 0)
 		return (0);	/* queue not started - no routing */
 

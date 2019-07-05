@@ -136,7 +136,7 @@ pg_db_prepare_que_sqls(pbs_db_conn_t *conn)
  * @retval	-1 - On Error
  * @retval	 0 - On Success
  * @retval	>1 - Number of attributes
- * @retval 	-2 -  Success but data same as old, so not loading data (but locking if lock requested)
+ * @retval  -2 - Success but data same as old, so not loading data (but locking if lock requested)
  */
 static int
 load_que(PGresult *res, pbs_db_que_info_t *pq, int row)

@@ -1299,7 +1299,7 @@ struct batch_request *preq;
 		req_reject(PBSE_QUENBIG, 0, preq);
 		return;
 	}
-	if (find_queuebyname(preq->rq_ind.rq_manager.rq_objname)) {
+	if (find_queuebyname((preq->rq_ind.rq_manager.rq_objname), 0)) {
 		req_reject(PBSE_QUEEXIST, 0, preq);
 		return;
 	}
@@ -1379,7 +1379,7 @@ mgr_queue_delete(struct batch_request *preq)
 
 	/* get the queue to be deleted */
 	if (type == 0) {
-		pque = find_queuebyname(name);
+		pque = find_queuebyname(name, 0);
 	} else {
 		problem_queues = (struct pbs_queue **)malloc(server.sv_qs.sv_numque * sizeof(struct pbs_queue *));
 		if (problem_queues == NULL) {
@@ -1815,6 +1815,7 @@ mgr_queue_set(struct batch_request *preq)
 	char      *qname;
 	int	   rc;
 
+
 	if ((*preq->rq_ind.rq_manager.rq_objname == '\0') ||
 		(*preq->rq_ind.rq_manager.rq_objname == '@')) {
 		qname   = all_quename;
@@ -1823,7 +1824,7 @@ mgr_queue_set(struct batch_request *preq)
 	} else {
 		qname   = preq->rq_ind.rq_manager.rq_objname;
 		allques = 0;
-		pque = find_queuebyname(qname);
+		pque = find_queuebyname(qname, 0);
 	}
 	if (pque == NULL) {
 		req_reject(PBSE_UNKQUE, 0, preq);
@@ -1840,8 +1841,8 @@ mgr_queue_set(struct batch_request *preq)
 		pque = (pbs_queue *)GET_NEXT(svr_queues);
 
 	plist = (svrattrl *)GET_NEXT(preq->rq_ind.rq_manager.rq_attr);
-	while (pque) {
 
+	while (pque) {
 		rc = mgr_set_attr(pque->qu_attr, que_attr_def, QA_ATR_LAST,
 			plist, preq->rq_perm, &bad, (void *)pque,
 			ATR_ACTION_ALTER);
@@ -1896,7 +1897,10 @@ mgr_queue_unset(struct batch_request *preq)
 	pbs_queue *pque;
 	char      *qname;
 	int	   rc;
+	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
+	if (pbs_db_begin_trx(conn, 0, 0) != 0)
+		goto err;
 
 	if ((*preq->rq_ind.rq_manager.rq_objname == '\0') ||
 		(*preq->rq_ind.rq_manager.rq_objname == '@')) {
@@ -1906,7 +1910,7 @@ mgr_queue_unset(struct batch_request *preq)
 	} else {
 		allques = 0;
 		qname   = preq->rq_ind.rq_manager.rq_objname;
-		pque = find_queuebyname(qname);
+		pque = find_queuebyname(qname, 1);
 	}
 	if (pque == NULL) {
 		req_reject(PBSE_UNKQUE, 0, preq);
@@ -1950,6 +1954,10 @@ mgr_queue_unset(struct batch_request *preq)
 		else
 			break;
 	}
+	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
+		goto err;
+	err:
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 	reply_ack(preq);
 }
 

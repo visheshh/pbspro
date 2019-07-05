@@ -273,7 +273,7 @@ que_purge(pbs_queue *pque)
  */
 
 pbs_queue *
-find_queuebyname(char *quename)
+find_queuebyname(char *quename, int lock)
 {
 	char  *pc;
 	pbs_queue *pque;
@@ -292,7 +292,7 @@ find_queuebyname(char *quename)
 	}
 	if (pc)
 		*pc = '@';	/* restore '@' server portion */
-	return (pque);
+	return que_recov_db(quename, pque, lock);
 }
 #ifdef NAS /* localmod 075 */
 
@@ -343,7 +343,7 @@ get_dfltque(void)
 	pbs_queue *pq = NULL;
 
 	if (server.sv_attr[SRV_ATR_dflt_que].at_flags & ATR_VFLAG_SET)
-		pq = find_queuebyname(server.sv_attr[SRV_ATR_dflt_que].at_val.at_str);
+		pq = find_queuebyname(server.sv_attr[SRV_ATR_dflt_que].at_val.at_str, 0);
 	return (pq);
 }
 

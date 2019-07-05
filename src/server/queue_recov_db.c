@@ -129,7 +129,7 @@ svr_to_db_que(pbs_queue *pque, pbs_db_que_info_t *pdbque, int updatetype)
  *@return 0      Success
  *@return !=0    Failure
  */
-static int
+int
 db_to_svr_que(pbs_queue *pque, pbs_db_que_info_t *pdbque)
 {
 	pque->qu_qs.qu_name[sizeof(pque->qu_qs.qu_name) - 1] = '\0';
@@ -166,8 +166,11 @@ que_save_db(pbs_queue *pque, int mode)
 	pbs_db_obj_info_t	obj;
 	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 	int savetype = PBS_UPDATE_DB_FULL;
+	int rc;
+	rc = 0;
 
-	if (svr_to_db_que(pque, &dbque, savetype) != 0)
+	rc = svr_to_db_que(pque, &dbque, savetype);
+	if (rc != 0)
 		goto db_err;
 
 	obj.pbs_db_obj_type = PBS_DB_QUEUE;
@@ -176,8 +179,10 @@ que_save_db(pbs_queue *pque, int mode)
 	if (mode == QUE_SAVE_NEW)
 		savetype = PBS_INSERT_DB;
 
-	if (pbs_db_save_obj(conn, &obj, savetype) != 0)
-		goto db_err;
+	rc = pbs_db_save_obj(conn, &obj, savetype);
+	if (rc != 0){
+	    goto db_err;
+	}
 
 	pbs_db_reset_obj(&obj);
 
@@ -208,39 +213,67 @@ db_err:
  *
  */
 pbs_queue *
-que_recov_db(char *qname, pbs_queue *pq_now, int lock)
+que_recov_db(char *qname, pbs_queue *pq, int lock)
 {
-	pbs_queue		*pq;
 	pbs_db_que_info_t	dbque;
 	pbs_db_obj_info_t	obj;
 	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
+	int rc;
+	int		 i;
+	int oldque;
+	attribute	*pattr;
+	attribute_def	*pdef;
 
 	obj.pbs_db_obj_type = PBS_DB_QUEUE;
 	obj.pbs_db_un.pbs_db_que = &dbque;
+	oldque = 1;
 
-	pq = que_alloc(qname);  /* allocate & init queue structure space */
-	if (pq == NULL) {
-		log_err(-1, "que_recov", "que_alloc failed");
-		return NULL;
-	}
-
+	/* load server_qs */
 	dbque.qu_name[sizeof(dbque.qu_name) - 1] = '\0';
-	if (pq_now)
-		dbque.qu_mtime = pq_now->qu_qs.qu_mtime;
+	if (pq)
+		dbque.qu_mtime = pq->qu_qs.qu_mtime;
 	else
 		dbque.qu_mtime = 0;
-
 	strncpy(dbque.qu_name, qname, sizeof(dbque.qu_name));
 
+	if (!pq) {
+		pq = que_alloc(qname);  /* allocate & init queue structure space */
+		oldque = 0;
+		if (pq == NULL) {
+			log_err(-1, "que_recov", "que_alloc failed");
+			return NULL;
+		}
+	}
+
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj, 0) != 0)
+
+	rc = pbs_db_load_obj(conn, &obj, lock);
+	if (rc == -1){
 		goto db_err;
+	}
+
+	if (rc == -2){
+		return pq;
+	}
+
+	if (oldque){
+			/* remove any malloc working attribute space */
+
+		for (i=0; i < (int)QA_ATR_LAST; i++) {
+			pdef  = &que_attr_def[i];
+			pattr = &pq->qu_attr[i];
+
+			pdef->at_free(pattr);
+		}
+	}
 	
 	if (db_to_svr_que(pq, &dbque) != 0)
 		goto db_err;
 
 	pbs_db_reset_obj(&obj);
-
+	if (pq)
+		log_err(-1, "que_recov", "pq returned successfully");
+	
 	/* all done recovering the queue */
 	return (pq);
 

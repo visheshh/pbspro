@@ -371,6 +371,7 @@ job_save_db(job *pjob, int updatetype)
 	int savetype = PBS_UPDATE_DB_FULL;
 	int rc;
 
+
 	/*
 	 * if job has new_job flag set, then updatetype better be SAVEJOB_NEW
 	 * If not, ignore and return success
@@ -400,6 +401,10 @@ job_save_db(job *pjob, int updatetype)
 		savetype = PBS_UPDATE_DB_QUICK;
 	else
 		savetype = PBS_UPDATE_DB_FULL;
+
+
+	sprintf(log_buffer, "Trying to save job %s, updatetype=%d, savetype=%d", pjob->ji_qs.ji_jobid, updatetype, savetype);
+	log_err(-1, __func__, log_buffer);
 
 	if (svr_to_db_job(pjob, &dbjob, savetype) != 0)
 		goto db_err;

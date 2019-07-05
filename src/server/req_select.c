@@ -759,7 +759,7 @@ build_selist(svrattrl *plist, int perm, struct select_list **pselist, pbs_queue 
 
 					/* does specified destination exist? */
 
-					*pque = find_queuebyname(plist->al_value);
+					*pque = find_queuebyname(plist->al_value, 0);
 #ifdef NAS /* localmod 075 */
 					if (*pque == NULL)
 						*pque = find_resvqueuebyname(plist->al_value);

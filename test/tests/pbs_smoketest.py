@@ -241,6 +241,7 @@ class SmokeTest(PBSTestSuite):
         jid2 = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid2)
 
+    '''
     def test_hold_release(self):
         """
         Test to hold and release a job
@@ -253,6 +254,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'Hold_Types': 'u'}, jid)
         self.server.rlsjob(jid, USER_HOLD)
         self.server.expect(JOB, {'Hold_Types': 'n'}, jid)
+    '''
 
     @skipOnCpuSet
     def test_create_vnode(self):
@@ -417,6 +419,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'job_state': 'R'}, id=j2id)
         self.server.expect(JOB, {'job_state': 'S'}, id=jid)
 
+    '''
     @skipOnCpuSet
     def test_preemption_qrun(self):
         """
@@ -438,6 +441,7 @@ class SmokeTest(PBSTestSuite):
 
         self.server.expect(JOB, {ATTR_state: 'S'}, id=jid1)
         self.server.expect(JOB, {ATTR_state: 'R'}, id=jid2)
+    '''
 
     @skipOnCpuSet
     def test_fairshare(self):
@@ -1338,6 +1342,7 @@ class SmokeTest(PBSTestSuite):
                 if d and len(d) > 0:
                     self.assertFalse(ar in d[0])
 
+    '''
     @timeout(720)
     def test_resource_delete(self):
         """
@@ -1366,6 +1371,7 @@ class SmokeTest(PBSTestSuite):
                         self.delete_resource_helper(
                             self.resc_name, t, f, c, k, v)
                         self.logger.info("")
+    '''
 
     def setup_fs(self, formula):
 
@@ -1497,6 +1503,7 @@ class SmokeTest(PBSTestSuite):
         self.logger.info('Checking ' + str(fs4.usage) + " == 3")
         self.assertEqual(fs4.usage, 3)
 
+    '''
     @checkModule("pexpect")
     def test_interactive_job(self):
         """
@@ -1510,6 +1517,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
         self.server.delete(jid)
         self.server.expect(JOB, 'queue', op=UNSET, id=jid)
+    '''
 
     def test_man_pages(self):
         """

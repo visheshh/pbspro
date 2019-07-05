@@ -238,15 +238,19 @@ local_move(job *jobp, struct batch_request *req)
 	int	   mtype;
 	attribute *pattr;
 	long	newtype = -1;
+	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
 
+	if (pbs_db_begin_trx(conn, 0, 0) != 0)
+		goto err;
 
 	/* search for destination queue */
-	if ((qp = find_queuebyname(destination)) == NULL) {
+	if ((qp = find_queuebyname(destination, 0)) == NULL) {
 		sprintf(log_buffer,
 			"queue %s does not exist",
 			destination);
 		log_err(-1, __func__, log_buffer);
 		pbs_errno = PBSE_UNKQUE;
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return -1;
 	}
 
@@ -270,6 +274,7 @@ local_move(job *jobp, struct batch_request *req)
 
 	if (pbs_errno) {
 		/* should this queue be retried? */
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return (should_retry_route(pbs_errno));
 	}
 
@@ -309,12 +314,21 @@ local_move(job *jobp, struct batch_request *req)
 	}
 
 
-	if ((pbs_errno = svr_enquejob(jobp)) != 0)
+	if ((pbs_errno = svr_enquejob(jobp)) != 0){
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return -1;		/* should never ever get here */
-
+	}
 	jobp->ji_lastdest = 0;	/* reset in case of another route */
 
 	(void)job_save(jobp, SAVEJOB_FULL);
+	//job_save_db(jobp, SAVEJOB_FULL);
+	que_save_db(qp, QUE_SAVE_FULL);
+	svr_save_db(&server, SVR_SAVE_FULL);
+
+	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
+		goto err;
+	err:
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 
 	/* If a scheduling cycle is in progress, then this moved job may have
 	 * had changes resulting from the move that would impact scheduling or

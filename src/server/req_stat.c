@@ -349,7 +349,7 @@ void req_stat_job(struct batch_request *preq)
 		rc = PBSE_UNKJOBID;
 
 	} else if ( isalpha((int)*name) ) {
-		pque = find_queuebyname(name)	/* status jobs in a queue */;
+		pque = find_queuebyname(name, 0)	/* status jobs in a queue */;
 #ifdef NAS /* localmod 075 */
 		if (pque == NULL)
 			pque = find_resvqueuebyname(name);
@@ -499,7 +499,7 @@ req_stat_que(struct batch_request *preq)
 	if ((*name == '\0') || (*name =='@'))
 		type = 1;
 	else {
-		pque = find_queuebyname(name);
+		pque = find_queuebyname(name, 0);
 #ifdef NAS /* localmod 075 */
 		if (pque == NULL)
 			pque = find_resvqueuebyname(name);

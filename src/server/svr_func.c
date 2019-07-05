@@ -371,8 +371,8 @@ set_resc_assigned(void *pobj, int objtype, enum batch_op op)
 	if (!objtype) {
 		pjob = (job *)pobj;
 
-		if ((find_queuebyname(pjob->ji_qs.ji_queue) == 0) ||
-			(find_queuebyname(pjob->ji_qs.ji_queue)->qu_qs.qu_type != QTYPE_Execution))
+		if ((find_queuebyname(pjob->ji_qs.ji_queue, 0) == 0) ||
+			(find_queuebyname(pjob->ji_qs.ji_queue, 0)->qu_qs.qu_type != QTYPE_Execution))
 			return;
 
 		if (op == INCR) {
@@ -415,7 +415,7 @@ set_resc_assigned(void *pobj, int objtype, enum batch_op op)
 				rescp = (resource *) GET_NEXT(pjob->ji_wattr[(int) JOB_ATR_resc_released_list].at_val.at_list);
 		}
 		sysru = &server.sv_attr[(int)SRV_ATR_resource_assn];
-		queru = &find_queuebyname(pjob->ji_qs.ji_queue)->qu_attr[(int)QE_ATR_ResourceAssn];
+		queru = &find_queuebyname(pjob->ji_qs.ji_queue, 0)->qu_attr[(int)QE_ATR_ResourceAssn];
 
 		if (pjob->ji_resvp || (pjob->ji_myResv &&
 			(pjob->ji_myResv->ri_qs.ri_state == RESV_RUNNING ||
@@ -576,7 +576,7 @@ ck_chkpnt(attribute *pattr, void *pobject, int mode)
 	/* If the checkpoint attribute is being altered, then check    */
 	/* against the queue's Checkpoint_min attribute as when queued */
 	if (mode == ATR_ACTION_ALTER) {
-		pque = find_queuebyname(((job *)pobject)->ji_qs.ji_queue);
+		pque = find_queuebyname(((job *)pobject)->ji_qs.ji_queue, 0);
 
 		eval_chkpnt(pattr, &pque->qu_attr[(int)QE_ATR_ChkptMim]);
 	}
@@ -7112,7 +7112,7 @@ default_queue_chk(attribute *pattr, void *pobj, int actmode)
 
 	if (actmode == ATR_ACTION_ALTER) {
 		if (pattr->at_flags & ATR_VFLAG_SET) {
-			pq = find_queuebyname(pattr->at_val.at_str);
+			pq = find_queuebyname(pattr->at_val.at_str, 0);
 			if (pq == NULL) {
 				return (PBSE_UNKQUE);
 			}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1994-2018 Altair Engineering, Inc.
+ * Copyright (C) 1994-2019 Altair Engineering, Inc.
  * For more information, contact Altair at www.altair.com.
  *
  * This file is part of the PBS Professional ("PBS Pro") software.
@@ -431,11 +431,11 @@ req_quejob(struct batch_request *preq)
 		}
 		created_here = JOB_SVFLG_HERE;
 		if (i == 0) {	/* Normal job */
-			(void)sprintf(jidbuf, "%lld.%s",
-				next_svr_sequence_id, server_name);
+			(void)sprintf(jidbuf, "%lld.%s_%d",
+				next_svr_sequence_id, server_name, pbs_conf.batch_service_port);
 		} else {	/* Array Job */
-			(void)sprintf(jidbuf, "%lld[].%s",
-					next_svr_sequence_id, server_name);
+			(void)sprintf(jidbuf, "%lld[].%s_%d",
+					next_svr_sequence_id, server_name, pbs_conf.batch_service_port);
 		}
 		jid = jidbuf;
 	}
@@ -486,7 +486,6 @@ req_quejob(struct batch_request *preq)
 		}
 	} */
 
-
 	/* find requested queue, is it there? */
 
 	qname = preq->rq_ind.rq_queuejob.rq_destin;
@@ -494,7 +493,7 @@ req_quejob(struct batch_request *preq)
 		pque = get_dfltque();
 		rc   = PBSE_QUENODFLT;
 	} else { 		/* else find the named queue */
-		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin);
+		pque = find_queuebyname(preq->rq_ind.rq_queuejob.rq_destin, 0);
 #ifdef NAS /* localmod 075 */
 		if (pque == NULL)
 			pque = find_resvqueuebyname(qname);
@@ -995,25 +994,6 @@ req_quejob(struct batch_request *preq)
 	}
 
 	/*
-	 * See if the job is qualified to go into the requested queue.
-	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
-	 *
-	 * svr_chkque is called way down here because it needs to have the
-	 * job structure and attributes already set up.
-	 */
-
-	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
-	if (rc) {
-		if (pj->ji_clterrmsg)
-			reply_text(preq, rc, pj->ji_clterrmsg);
-		else
-			req_reject(rc, 0, preq);
-		job_purge(pj);
-		return;
-	}
-
-
-	/*
 	 * if single, signon password scheme is in place, only allow submission
 	 * if a per user per server password exists.
 	 *
@@ -1078,7 +1058,7 @@ req_quejob(struct batch_request *preq)
 			}
 		}
 	}
-
+	
 	pj->ji_wattr[(int)JOB_ATR_substate].at_val.at_long =
 		JOB_SUBSTATE_TRANSIN;
 	pj->ji_wattr[(int)JOB_ATR_substate].at_flags |=
@@ -1118,7 +1098,10 @@ req_quejob(struct batch_request *preq)
 			return;
 		}
 	}
+
+
 #endif		/* not PBS_MOM */
+
 
 	/* set remaining job structure elements			*/
 
@@ -1127,12 +1110,12 @@ req_quejob(struct batch_request *preq)
 	pj->ji_wattr[(int)JOB_ATR_state].at_val.at_char = 'T';
 
 	pj->ji_wattr[(int)JOB_ATR_mtime].at_val.at_long = (long)time_now;
-	pj->ji_wattr[(int)JOB_ATR_mtime].at_flags |=
-		ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
+	pj->ji_wattr[(int)JOB_ATR_mtime].at_flags |= ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
 
 	pj->ji_qs.ji_un_type = JOB_UNION_TYPE_NEW;
 	pj->ji_qs.ji_un.ji_newt.ji_fromsock = sock;
 	pj->ji_qs.ji_un.ji_newt.ji_scriptsz = 0;
+
 
 #ifdef PBS_MOM
 	mom_hook_input_init(&hook_input);
@@ -1271,6 +1254,7 @@ req_quejob(struct batch_request *preq)
 
 		}
 	}
+
 #endif	/* not PBS_MOM */
 }
 
@@ -1830,11 +1814,16 @@ req_commit(struct batch_request *preq)
 		return;
 	}
 
+
+	pbs_db_begin_trx(conn, 0, 0);
+	rc = svr_recov_db(1);
+
 	/* Set Server level entity usage */
 
 	if ((rc = account_entity_limit_usages(pj, NULL, NULL, INCR, ETLIM_ACC_ALL)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
 
@@ -1858,11 +1847,41 @@ req_commit(struct batch_request *preq)
 	pj->ji_wattr[(int)JOB_ATR_qrank].at_flags |=
 		ATR_VFLAG_SET|ATR_VFLAG_MODCACHE;
 
+	/*
+	 * See if the job is qualified to go into the requested queue.
+	 * Note, if an execution queue, then ji_qs.ji_un.ji_exect is set up
+	 *
+	 * svr_chkque is called way down here because it needs to have the
+	 * job structure and attributes already set up.
+	 */
+
+	//pbs_db_begin_trx(conn, 0, 0);
+	pque = find_queuebyname(pj->ji_qs.ji_queue, 1);
+	rc = svr_chkque(pj, pque, preq->rq_host, MOVE_TYPE_Move);
+	if (rc) {
+		if (pj->ji_clterrmsg)
+			reply_text(preq, rc, pj->ji_clterrmsg);
+		else
+			req_reject(rc, 0, preq);
+		job_purge(pj);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return;
+	}
+
 	if ((rc = svr_enquejob(pj)) != 0) {
 		job_purge(pj);
 		req_reject(rc, 0, preq);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 		return;
 	}
+	svr_save_db(&server, SVR_SAVE_FULL);
+	que_save_db(pque, QUE_SAVE_FULL);
+	/*
+		if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0) {
+		job_purge(pj);
+		req_reject(PBSE_SYSTEM, 0, preq);
+		return;
+		} */
 
 	if (pj->ji_resvp) {
 		/*we are supposedly dealing with a reservation job:
@@ -1883,6 +1902,7 @@ req_commit(struct batch_request *preq)
 		if (presv == NULL) {
 			(void)job_purge(pj);
 			req_reject(PBSE_SYSTEM, 0, preq);
+			(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
 			return;
 		}
 		delete_link(&presv->ri_allresvs);
@@ -1890,9 +1910,8 @@ req_commit(struct batch_request *preq)
 		set_scheduler_flag(SCH_SCHEDULE_NEW, dflt_scheduler);
 		Update_Resvstate_if_resv(pj);
 	}
-
+	//pbs_db_begin_trx(conn, 0, 0);
 	/* save job and job script within single transaction */
-	pbs_db_begin_trx(conn, 0, 0);
 
 	/* Make things faster by writing job only once here  - at commit time */
 	if (job_or_resv_save((void *) pj, SAVEJOB_NEW, JOB_OBJECT)) {
@@ -1934,7 +1953,7 @@ req_commit(struct batch_request *preq)
 	 * to the user.
 	 */
 
-	pque = find_queuebyname(pj->ji_qs.ji_queue);
+	pque = find_queuebyname(pj->ji_qs.ji_queue, 0);
 
 	if ((preq->rq_fromsvr == 0) &&
 		(pque->qu_qs.qu_type == QTYPE_RoutePush) &&
@@ -3086,7 +3105,7 @@ handle_qmgr_reply_to_resvQcreate(struct work_task *pwt)
 		log_event(PBSEVENT_RESV, PBS_EVENTCLASS_RESV, LOG_INFO,
 			presv->ri_qs.ri_resvID, log_buffer);
 	} else {
-		pque = find_queuebyname(preq->rq_ind.rq_manager.rq_objname);
+		pque = find_queuebyname(preq->rq_ind.rq_manager.rq_objname, 0);
 		if ((presv->ri_qp = pque) != 0)
 			pque->qu_resvp = presv;
 		(void)strcpy(presv->ri_qs.ri_queue,
@@ -3199,7 +3218,6 @@ static
 long long get_next_svr_sequence_id(void)
 {
 	long long ret_svr_sequence_id = 0;
-
 	/* JobId's save to the database after every 1000 jobs */
 	if (svr_sequence_window_count == 0) {
 		/* Save the job-id numbers in the database by a SEQ_WIN_INCR(1000) in advance.

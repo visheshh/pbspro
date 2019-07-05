@@ -940,7 +940,6 @@ create_subjob(job *parent, char *newjid, int *rc)
 		*rc = PBSE_IVALREQ;
 		return NULL;
 	}
-
 	psub = &subj->ji_wattr[JOB_ATR_outpath];
 	snprintf(tmp_path, MAXPATHLEN + 1, "%s", psub->at_val.at_str);
 	job_attr_def[JOB_ATR_outpath].at_decode(psub, NULL, NULL,

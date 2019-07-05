@@ -195,6 +195,8 @@ db_to_svr_svr(struct server *ps, pbs_db_svr_info_t *pdbsvr)
 		(int) SRV_ATR_LAST, 0)) != 0)
 		return -1;
 
+	//ps->sv_attr[(int)SRV_ATR_State].at_val.at_long = SV_STATE_RUN;
+
 	return 0;
 }
 
@@ -269,6 +271,11 @@ svr_recov_db(int lock)
 	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
 	pbs_db_svr_info_t dbsvr;
 	pbs_db_obj_info_t obj;
+	int rc;
+	int		 i;
+	attribute	*pattr;
+	attribute_def	*pdef;
+	static int firsttime = 1;
 
 	/* load server_qs */
 	dbsvr.attr_list.attr_count = 0;
@@ -276,12 +283,32 @@ svr_recov_db(int lock)
 
 	obj.pbs_db_obj_type = PBS_DB_SVR;
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
-	dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+
+	if (firsttime) {
+		dbsvr.sv_savetm = 0;
+		firsttime = 0;
+	} else {
+		dbsvr.sv_savetm = server.sv_qs.sv_savetm;
+	}
 
 	/* read in job fixed sub-structure */
-	if (pbs_db_load_obj(conn, &obj, 0) != 0)
+    rc = pbs_db_load_obj(conn, &obj, lock);
+
+	if (rc == -1)
 		goto db_err;
-	
+
+	if (rc == -2)
+		return 0;
+ 
+ 	/* free all the svr attributes */
+
+	for (i=1; i < (int)SRV_ATR_LAST; i++) {
+		pdef  = &svr_attr_def[i];
+		pattr = &server.sv_attr[i];
+
+		pdef->at_free(pattr);
+	}
+
 	if (db_to_svr_svr(&server, &dbsvr) != 0)
 		goto db_err;
 
