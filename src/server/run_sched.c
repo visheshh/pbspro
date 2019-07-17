@@ -215,30 +215,29 @@ find_assoc_sched_pque(pbs_queue *pq, pbs_sched **target_sched)
 		return 0;
 
 	if (pq->qu_attr[QA_ATR_partition].at_flags & ATR_VFLAG_SET) {
-		*target_sched = recov_sched_from_db(pq->qu_attr[QA_ATR_partition].at_val.at_str, NULL);
+		*target_sched = find_scheduler_by_partition(pq->qu_attr[QA_ATR_partition].at_val.at_str);
+
 		if (*target_sched == NULL) {
-			/* if scheduler is not present in the database means one possibility is
-			 * somebody deleted it from another server so if this is the case then we need to
-			 * delete the scheduler from the cache also
-			 */
-			pbs_sched *old_sched;
-			old_sched = find_scheduler_by_partition(pq->qu_attr[QA_ATR_partition].at_val.at_str);
-			if (old_sched != NULL)
-				sched_free(old_sched);
-			return 0;
-		}
-		else
+			*target_sched = recov_sched_from_db(pq->qu_attr[QA_ATR_partition].at_val.at_str, NULL);
+			if (*target_sched == NULL) {
+				return 0;
+			} else
+				return 1;
+		} else
 			return 1;
 	} else {
-		dflt_scheduler = *target_sched = recov_sched_from_db(NULL, "default");
+		dflt_scheduler = *target_sched = find_scheduler("default");
 		if (!dflt_scheduler) {
-			dflt_scheduler = sched_alloc(PBS_DFLT_SCHED_NAME, 1);
-			set_sched_default(dflt_scheduler, 0);
-			(void)sched_save_db(dflt_scheduler, SVR_SAVE_NEW);
-			*target_sched = dflt_scheduler;
+			dflt_scheduler = *target_sched = recov_sched_from_db(NULL, "default");
+			if (!dflt_scheduler) {
+				dflt_scheduler = sched_alloc(PBS_DFLT_SCHED_NAME, 1);
+				set_sched_default(dflt_scheduler, 0);
+				(void)sched_save_db(dflt_scheduler, SVR_SAVE_NEW);
+				*target_sched = dflt_scheduler;
+			}
+			dflt_scheduler->pbs_scheduler_addr = pbs_scheduler_addr;
+			dflt_scheduler->pbs_scheduler_port = pbs_scheduler_port;
 		}
-		dflt_scheduler->pbs_scheduler_addr = pbs_scheduler_addr;
-		dflt_scheduler->pbs_scheduler_port = pbs_scheduler_port;
 		return 1;
 	}
 	return 0;

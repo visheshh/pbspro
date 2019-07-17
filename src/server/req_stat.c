@@ -911,6 +911,10 @@ req_stat_sched(struct batch_request *preq)
 				dflt_scheduler = psched;
 			stat_reply = status_sched(psched, preq, &preply->brp_un.brp_status);
 		} else {
+			pbs_sched *old_sched;
+			old_sched = find_scheduler(preq->rq_ind.rq_status.rq_id);
+			if (old_sched != NULL)
+				sched_free(old_sched);
 			req_reject(PBSE_UNKSCHED, 0, preq);
 			return;
 		}
@@ -964,6 +968,11 @@ req_stat_sched(struct batch_request *preq)
 					stat_reply = status_sched(psched, preq, &preply->brp_un.brp_status);
 					if (stat_reply != 0)
 						break;
+				} else {
+					pbs_sched *old_sched;
+					old_sched = find_scheduler(dbsched.sched_name);
+					if (old_sched != NULL)
+						sched_free(old_sched);
 				}
 				pbs_db_reset_obj(&obj);
 			 }
