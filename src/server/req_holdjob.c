@@ -210,7 +210,7 @@ req_holdjob(struct batch_request *preq)
 		} else {
 			pjob->ji_qs.ji_svrflags |=
 				(JOB_SVFLG_HASRUN | JOB_SVFLG_CHKPT | JOB_SVFLG_HASHOLD);
-			(void)job_save(pjob, SAVEJOB_QUICK);
+			(void)job_save(pjob, SAVEJOB_FULL);
 			log_event(PBSEVENT_JOB, PBS_EVENTCLASS_JOB, LOG_INFO,
 				pjob->ji_qs.ji_jobid, log_buffer);
 		}
@@ -431,7 +431,7 @@ post_hold(struct work_task *pwt)
 			JOB_SVFLG_HASRUN | JOB_SVFLG_ChkptMig;
 
 		pjob->ji_modified = 1;	  /* indicate attributes changed     */
-		(void)job_save(pjob, SAVEJOB_QUICK);
+		(void)job_save(pjob, SAVEJOB_FULL);
 
 		/* note in accounting file */
 
