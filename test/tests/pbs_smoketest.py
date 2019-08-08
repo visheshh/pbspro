@@ -853,6 +853,7 @@ class SmokeTest(PBSTestSuite):
         self.server.expect(SERVER, {'total_jobs': 0})
         self.server.manager(MGR_CMD_DELETE, QUEUE, id="expressq")
 
+    ''' will be fixed with PBS-23252
     @skipOnCpuSet
     def test_basic_ja(self):
         """
@@ -886,6 +887,7 @@ class SmokeTest(PBSTestSuite):
         self.server.cleanup_jobs()
         self.server.expect(SERVER, {'total_jobs': 0})
         self.server.manager(MGR_CMD_DELETE, QUEUE, id="expressq")
+    '''
 
     def submit_reserv(self, resv_start, ncpus, resv_dur):
         a = {'Resource_List.select': '1:ncpus=%d' % ncpus,
