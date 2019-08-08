@@ -1311,8 +1311,12 @@ vnode_available(struct pbsnode *np)
 					/* Otherwise revert its state to Confirmed */
 					resv_setResvState(presv, RESV_CONFIRMED, RESV_CONFIRMED);
 				}
+				
 				/* Unset all of the reservation retry attributes and values */
 				unset_resv_retry(presv);
+				/* This resv_save is called to save any state changes done is resv_setResvState function */
+				if (presv->ri_modified)
+					(void)job_or_resv_save((void *)presv, SAVERESV_FULL, RESC_RESV_OBJECT);
 			}
 		} else {
 			/* An inconsistency in recognizing node state transitions caused an
@@ -1477,6 +1481,10 @@ vnode_unavailable(struct pbsnode *np, int account_vnode)
 			}
 		} else if (degraded_time > resv_start_time)
 			(void) resv_setResvState(presv, presv->ri_qs.ri_state, RESV_DEGRADED);
+
+		/* This resv_save is called to save any state changes done is resv_setResvState function */
+		if (presv->ri_modified)
+			(void)job_or_resv_save((void *)presv, SAVERESV_FULL, RESC_RESV_OBJECT);
 
 		/* reference count the number of vnodes down such that the state of the
 		 * reservation can be reset to CONFIRMED once the number of unavailable
@@ -8028,6 +8036,9 @@ set_old_subUniverse(resc_resv	*presv)
 
 		/* unset the reservation retry time attribute */
 		unset_resv_retry(presv);
+		/* This resv_save is called to save any state changes done is resv_setResvState function */
+		if (presv->ri_modified)
+			(void)job_or_resv_save((void *)presv, SAVERESV_FULL, RESC_RESV_OBJECT);
 	}
 	free(sp);
 }
