@@ -113,13 +113,13 @@ sched_alloc(char *sched_name, int append)
  */
 
 pbs_sched *
-find_sched(char *sched_name)
+find_sched(char *sched_name, int lock)
 {
 	pbs_sched *psched = NULL;
 	if (!sched_name)
 		return NULL;
 
-	psched = recov_sched_from_db(NULL, sched_name);
+	psched = recov_sched_from_db(NULL, sched_name, lock);
 	if (psched) {
 		if (strcmp(psched->sc_name, "default") == 0)
 			dflt_scheduler = psched;
@@ -400,7 +400,7 @@ poke_scheduler(attribute *pattr, void *pobj, int actmode)
 			}
 		} else {
 			svr_attr_def[(int) SRV_ATR_scheduling].at_set(&server.sv_attr[SRV_ATR_scheduling], pattr, SET);
-			svr_save_db(&server, SVR_SAVE_QUICK);
+			svr_save_db(&server, SVR_SAVE_FULL);
 		}
 		if (actmode == ATR_ACTION_ALTER) {
 			if (pattr->at_val.at_long)

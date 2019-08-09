@@ -197,6 +197,7 @@ struct server {
 	int	  sv_cur_prov_records; /* number of provisiong requests
 					 currently running */
 	struct memcache_state trx_status;
+	int loaded;
 };
 
 
@@ -231,7 +232,6 @@ extern	long	reserve_retry_cutoff;
 #define SVR_HOSTACL "svr_hostacl"
 #define PBS_DEFAULT_NODE "1"
 
-#define SVR_SAVE_QUICK 0
 #define SVR_SAVE_FULL  1
 #define SVR_SAVE_NEW   2
 

@@ -218,7 +218,7 @@ find_assoc_sched_pque(pbs_queue *pq, pbs_sched **target_sched)
 		*target_sched = find_scheduler_by_partition(pq->qu_attr[QA_ATR_partition].at_val.at_str);
 
 		if (*target_sched == NULL) {
-			*target_sched = recov_sched_from_db(pq->qu_attr[QA_ATR_partition].at_val.at_str, NULL);
+			*target_sched = recov_sched_from_db(pq->qu_attr[QA_ATR_partition].at_val.at_str, NULL, 0);
 			if (*target_sched == NULL) {
 				return 0;
 			} else
@@ -228,7 +228,7 @@ find_assoc_sched_pque(pbs_queue *pq, pbs_sched **target_sched)
 	} else {
 		dflt_scheduler = *target_sched = find_scheduler("default");
 		if (!dflt_scheduler) {
-			dflt_scheduler = *target_sched = recov_sched_from_db(NULL, "default");
+			dflt_scheduler = *target_sched = recov_sched_from_db(NULL, "default", 0);
 			if (!dflt_scheduler) {
 				dflt_scheduler = sched_alloc(PBS_DFLT_SCHED_NAME, 1);
 				set_sched_default(dflt_scheduler, 0);
@@ -633,7 +633,7 @@ set_scheduler_flag(int flag, pbs_sched *psched)
 }
 
 pbs_sched *
-recov_sched_from_db(char *partition, char *sched_name)
+recov_sched_from_db(char *partition, char *sched_name, int lock)
 {
 	int ret;
 	int append = 1;
@@ -672,7 +672,7 @@ recov_sched_from_db(char *partition, char *sched_name)
 	}
 
 	/* recover sched */
-	ret = pbs_db_load_obj(conn, &obj, 0);
+	ret = pbs_db_load_obj(conn, &obj, lock);
 
 	if ((ret == -2) || (ret != 0)) {
 		goto db_err;

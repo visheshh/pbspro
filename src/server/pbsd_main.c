@@ -2358,7 +2358,7 @@ next_task()
 		time_t delay;
 		if ((delay = psched->sch_next_schedule - time_now) <= 0) {
 			pbs_sched *new_sched;
-			new_sched = recov_sched_from_db(NULL, psched->sc_name);
+			new_sched = recov_sched_from_db(NULL, psched->sc_name, 0);
 			if (new_sched == NULL) {
 				/* if scheduler is not present in the database means one possibility is
 				 * somebody deleted it from another server so if this is the case then we need to

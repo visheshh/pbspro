@@ -782,6 +782,7 @@ req_stat_svr(struct batch_request *preq)
 	struct brp_status  *pstat;
 
 
+	svr_recov_db(0);
 	/* update count and state counts from sv_numjobs and sv_jobstates */
 
 	server.sv_attr[(int)SRV_ATR_TotalJobs].at_val.at_long = server.sv_numjobs;
@@ -894,7 +895,7 @@ req_stat_sched(struct batch_request *preq)
 
 	psched = NULL;
 	if(strlen(preq->rq_ind.rq_status.rq_id) != 0) {
-		psched = recov_sched_from_db(NULL,preq->rq_ind.rq_status.rq_id);
+		psched = recov_sched_from_db(NULL,preq->rq_ind.rq_status.rq_id, 0);
 
 		if (strcmp(psched->sch_attr[(int) SCHED_ATR_sched_state].at_val.at_str, SC_DOWN) != 0) {
 			/* derive the scheduler state as this is transient and not going to save this in db */
@@ -946,7 +947,7 @@ req_stat_sched(struct batch_request *preq)
 		count = pbs_db_get_rowcount(state);
 		if (count > 0) {
 			 while ((rc = pbs_db_cursor_next(conn, state, &obj)) == 0) {
-				psched = recov_sched_from_db(NULL, dbsched.sched_name);
+				psched = recov_sched_from_db(NULL, dbsched.sched_name, 0);
 				if(psched) {
 					if (strcmp(psched->sc_name, "default") == 0)
 						dflt_scheduler = psched;

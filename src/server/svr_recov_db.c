@@ -245,7 +245,6 @@ svr_recov_db(int lock)
 	int		 i;
 	attribute	*pattr;
 	attribute_def	*pdef;
-	static int firsttime = 1;
 
 	/* load server_qs */
 	dbsvr.attr_list.attr_count = 0;
@@ -254,9 +253,8 @@ svr_recov_db(int lock)
 	obj.pbs_db_obj_type = PBS_DB_SVR;
 	obj.pbs_db_un.pbs_db_svr = &dbsvr;
 
-	if (firsttime) {
+	if (!server.loaded) {
 		dbsvr.sv_savetm = 0;
-		firsttime = 0;
 	} else {
 		dbsvr.sv_savetm = server.sv_qs.sv_savetm;
 		if (memcache_good(&server.trx_status, lock))
@@ -283,12 +281,14 @@ svr_recov_db(int lock)
 		pdef->at_free(pattr);
 	}
 
+
 	if (db_to_svr_svr(&server, &dbsvr) != 0)
 		goto db_err;
 
 	pbs_db_reset_obj(&obj);
 	memcache_update_state(&server.trx_status, lock);
 
+	server.loaded = 1;
 	return (0);
 
 db_err:
@@ -335,8 +335,6 @@ svr_save_db(struct server *ps, int mode)
 
 	if (mode == SVR_SAVE_FULL)
 		savetype = PBS_UPDATE_DB_FULL;
-	else if (mode == SVR_SAVE_QUICK)
-		savetype = PBS_UPDATE_DB_QUICK;
 	else
 		savetype = PBS_INSERT_DB;
 
@@ -405,8 +403,6 @@ sched_save_db(pbs_sched *ps, int mode)
 
 	if (mode == SVR_SAVE_FULL)
 		savetype = PBS_UPDATE_DB_FULL;
-	else if (mode == SVR_SAVE_QUICK)
-		savetype = PBS_UPDATE_DB_QUICK;
 	else
 		savetype = PBS_INSERT_DB;
 

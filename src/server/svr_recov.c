@@ -224,36 +224,8 @@ svr_save_fs(struct server *ps, int mode)
 	pmode = 0600;
 #endif
 
-	if (mode == SVR_SAVE_QUICK) {
-		sdb = open(path_svrdb, O_WRONLY | O_CREAT | O_Sync, pmode);
-		if (sdb < 0) {
-			log_err(errno, "svr_recov", msg_svdbopen);
-			return (-1);
-		}
-#ifdef WIN32
-		secure_file(path_svrdb, "Administrators",
-			READS_MASK|WRITES_MASK|STANDARD_RIGHTS_REQUIRED);
-		setmode(sdb, O_BINARY);
-#endif
-		while ((i=write(sdb, &ps->sv_qs, sizeof(struct server_qs))) !=
-			sizeof(struct server_qs)) {
-			if ((i == -1) && (errno == EINTR))
-				continue;
-			log_err(errno, __func__, msg_svdbnosv);
-			return (-1);
-		}
-#ifdef WIN32
-		if (_commit(sdb) != 0) {
-			log_err(errno, __func__, "flush server db file to disk failed!");
-			close(sdb);
-			return (-1);
-		}
-#endif
-
-		(void)close(sdb);
-
-	} else {	/* SVR_SAVE_FULL Save */
-
+	if (mode == SVR_SAVE_FULL) {
+		/* SVR_SAVE_FULL Save */
 		sdb = open(path_svrdb_new, O_WRONLY | O_CREAT | O_Sync, pmode);
 		if (sdb < 0) {
 			log_err(errno, "svr_recov", msg_svdbopen);
@@ -652,9 +624,6 @@ sched_save_fs(struct pbs_sched *ps, int mode)
 #else
 	pmode = 0600;
 #endif
-
-	if (mode == SVR_SAVE_QUICK)
-		return (-1);	/* invalid mode currently for scheduler */
 
 	/* Since only attributes, we only do a SVR_SAVE_FULL Save */
 
