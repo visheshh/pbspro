@@ -129,7 +129,6 @@ pg_db_fn_t db_fn_arr[PBS_DB_NUM_TYPES] =
 		NULL,
 		pg_db_reset_sched
 	},
-
 	{ /* PBS_DB_MOMINFO_TIME */
 		pg_db_save_mominfo_tm,
 		NULL,
@@ -139,6 +138,16 @@ pg_db_fn_t db_fn_arr[PBS_DB_NUM_TYPES] =
 		NULL,
 		NULL,
 		pg_db_reset_mominfo
+	},
+	{ /* PBS_DB_NODEJOB */
+		pg_db_save_nodejob,
+		pg_db_delete_nodejob,
+		pg_db_load_nodejob,
+		pg_db_find_nodejob,
+		pg_db_next_nodejob,
+		NULL,
+		pg_db_add_update_attr_nodejob,
+		pg_db_reset_nodejob
 	}
 };
 
@@ -373,6 +382,8 @@ pbs_db_prepare_sqls(pbs_db_conn_t *conn)
 	if (pg_db_prepare_node_sqls(conn) != 0)
 		return -1;
 	if (pg_db_prepare_sched_sqls(conn) != 0)
+		return -1;
+	if (pg_db_prepare_nodejob_sqls(conn) != 0)
 		return -1;
 	return 0;
 }

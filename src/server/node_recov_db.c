@@ -45,7 +45,6 @@
  *		data structure to database and to recover it from database.
  *
  * Included functions are:
- *	node_recov_db()
  *	node_save_db()
  *	db_to_svr_node()
  *	svr_to_db_node()
@@ -127,6 +126,7 @@ extern int make_pbs_list_attr_db(void *parent, pbs_db_attr_list_t *attr_list, st
  * @retval  -1 - Failure
  *
  */
+/*
 static int
 db_to_svr_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 {
@@ -137,6 +137,7 @@ db_to_svr_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 	}
 	else
 		pnode->nd_name = NULL;
+
 
 	if (pdbnd->nd_hostname && pdbnd->nd_hostname[0]!=0) {
 		pnode->nd_hostname = strdup(pdbnd->nd_hostname);
@@ -158,6 +159,7 @@ db_to_svr_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 
 	return 0;
 }
+*/
 
 /**
  * @brief
@@ -288,8 +290,8 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 		attrs[count].attr_flags = psvrl->al_flags;
 		count++;
 
-        delete_link(&psvrl->al_link);
-        (void)free(psvrl);
+		delete_link(&psvrl->al_link);
+		(void)free(psvrl);
 	}
 
 	/*
@@ -331,74 +333,7 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 	return 0;
 }
 
-/**
- * @brief
- *		Recover a node from the database
- *
- * @param[in]	nd	- Information about the node to recover
- *
- * @return	The recovered node structure
- * @retval	NULL - Failure
- * @retval	!NULL - Success - address of recovered node returned
- */
-struct pbsnode *
-node_recov_db(void *nd)
-{
-	pbs_db_obj_info_t obj;
-	struct pbsnode *np;
-	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
-	pbs_db_node_info_t *dbnode =(pbs_db_node_info_t *) nd;
 
-	np = malloc(sizeof(struct pbsnode));
-	if (np == NULL) {
-		log_err(errno, "node_recov", "error on recovering node attr");
-		return NULL;
-	}
-	obj.pbs_db_obj_type = PBS_DB_NODE;
-	obj.pbs_db_un.pbs_db_node = dbnode;
-
-	if (pbs_db_begin_trx(conn, 0, 0) !=0)
-		goto db_err;
-
-	if (pbs_db_load_obj(conn, &obj, 0) != 0)
-		goto db_err;
-
-	initialize_pbsnode(np, NULL, NTYPE_PBS);
-	if (db_to_svr_node(np, dbnode) != 0)
-		goto db_err;
-
-	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
-		goto db_err;
-
-	pbs_db_reset_obj(&obj);
-
-	return np;
-
-db_err:
-	free(np);
-	log_err(-1, "node_recov", "error on recovering node attr");
-	(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
-	return NULL;
-}
-
-
-/**
- * @brief
- *	Recover a node from the database without calling the action routines
- *	for the node attributes. This is because, the node attribute action
- *	routines access other resources in the node attributes which may
- *	not have been loaded yet. create_pbs_node (the top level caller)
- *	eventually calls mgr_set_attr to atomically set all the attributes
- *	and in that process triggers all the action routines.
- *
- * @param[in]	nd - Information about the node to recover
- * @param[in]	phead - list head to which to append loaded node attributes
- *
- * @return      Error code
- * @retval	-1 - Failure
- * @retval	 0 - Success
- *
- */
 int
 node_recov_db_raw(void *nd, pbs_list_head *phead)
 {
@@ -412,6 +347,7 @@ node_recov_db_raw(void *nd, pbs_list_head *phead)
 	return 0;
 }
 
+
 /**
  * @brief
  *	Save a node to the database. When we save a node to the database, delete
@@ -420,11 +356,6 @@ node_recov_db_raw(void *nd, pbs_list_head *phead)
  *	updated to the database.
  *
  * @param[in]	pnode - Pointer to the node to save
- * @param[in]	mode:
- *		NODE_SAVE_FULL - Full update along with attributes
- *		NODE_SAVE_QUICK - Quick update without attributes
- *		NODE_SAVE_NEW	- New node insert into database
- *		NODE_SAVE_QUICK_STATE - Quick update, along with state attrib
  *
  * @return      Error code
  * @retval	0 - Success

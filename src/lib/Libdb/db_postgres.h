@@ -156,6 +156,14 @@ typedef unsigned __int64 uint64_t;
 #define STMT_SELECT_MOMINFO_TIME "select_mominfo_time"
 #define STMT_INSERT_MOMINFO_TIME "insert_mominfo_time"
 #define STMT_UPDATE_MOMINFO_TIME "update_mominfo_time"
+#define STMT_UPDATE_NODEJOBATTRS "update_nodejob_attrs"
+
+/* node job statements */
+#define STMT_SELECT_NODEJOB "select_nodejob"
+#define STMT_FIND_NODEJOB_USING_NODEID "select_nodejob_with_nodeid"
+#define STMT_INSERT_NODEJOB "insert_nodejob"
+#define STMT_UPDATE_NODEJOB "update_nodejob"
+#define STMT_DELETE_NODEJOB "delete_nodejob"
 
 /* scheduler statement names */
 #define STMT_INSERT_SCHED "insert_sched"
@@ -321,6 +329,7 @@ int pg_db_prepare_job_sqls(pbs_db_conn_t *conn);
 int pg_db_prepare_resv_sqls(pbs_db_conn_t *conn);
 int pg_db_prepare_svr_sqls(pbs_db_conn_t *conn);
 int pg_db_prepare_node_sqls(pbs_db_conn_t *conn);
+int pg_db_prepare_nodejob_sqls(pbs_db_conn_t *conn);
 int pg_db_prepare_sched_sqls(pbs_db_conn_t *conn);
 int pg_db_prepare_que_sqls(pbs_db_conn_t *conn);
 
@@ -393,6 +402,17 @@ int pg_db_del_attr_svr(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, void *obj_id
 int pg_db_del_attr_que(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, void *obj_id, pbs_db_attr_list_t *attr_list);
 int pg_db_del_attr_node(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, void *obj_id, pbs_db_attr_list_t *attr_list);
 int pg_db_add_update_attr_node(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, void *obj_id, pbs_db_attr_list_t *attr_list);
+
+/* nodejob functions */
+int pg_db_add_update_attr_nodejob(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, void *node_id, pbs_db_attr_list_t *attr_list);
+void pg_db_reset_nodejob(pbs_db_obj_info_t *obj);
+int pg_db_load_nodejob(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int lock);
+int pg_db_save_nodejob(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj, int savetype);
+int pg_db_find_nodejob(pbs_db_conn_t *conn, void *st, pbs_db_obj_info_t *obj, pbs_db_query_options_t *opts);
+int pg_db_next_nodejob(pbs_db_conn_t *conn, void *st, pbs_db_obj_info_t *obj);
+int pg_db_delete_nodejob(pbs_db_conn_t *conn, pbs_db_obj_info_t *obj);
+
+/* reset functions */
 void pg_db_reset_job(pbs_db_obj_info_t *obj);
 void pg_db_reset_svr(pbs_db_obj_info_t *obj);
 void pg_db_reset_que(pbs_db_obj_info_t *obj);
