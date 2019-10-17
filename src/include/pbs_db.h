@@ -87,6 +87,9 @@ extern "C" {
 #define DB_TIMESTAMP_LEN 50
 #define UNIQUE_KEY_VIOLATION 23505 /* postgres throws this error code in case of primary key violation */
 
+#define LOCK 1
+#define NO_LOCK 0
+
 /**
  * @brief
  *  Structure used to maintain the database connection information
@@ -290,7 +293,6 @@ struct pbs_db_nodejob_info {
 	char	job_id[PBS_MAXSVRJOBID+1];
 	char	nd_name[PBS_MAXSERVERNAME+1];
 	INTEGER is_resv;
-	INTEGER	subnode_ct;
 	INTEGER	admn_suspend;
 	BIGINT nj_creattm;
 	BIGINT nj_savetm;

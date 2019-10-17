@@ -2372,7 +2372,7 @@ mgr_node_set(struct batch_request *preq)
 
 		if ((pbsndlist != NULL) && svr_totnodes) {
 			nodename = all_nodes;
-			pnode = pbsndlist[0];
+			pnode = GET_NODEBYINDX_LOCKED(pbsndlist, 0);
 			numnodes = svr_totnodes;
 		}
 		else { /* specified server has no nodes in its node table */
@@ -2401,7 +2401,7 @@ mgr_node_set(struct batch_request *preq)
 		if (pmom) {
 			numnodes = ((mom_svrinfo_t *)(pmom->mi_data))->msr_numvnds;
 			momidx = 0;
-			pnode = ((mom_svrinfo_t *)(pmom->mi_data))->msr_children[momidx];
+			pnode = GET_NODEBYINDX_LOCKED(((mom_svrinfo_t *)(pmom->mi_data))->msr_children, momidx);
 		} else {
 			/* no such Mom */
 			req_reject(PBSE_UNKNODE, 0, preq);
@@ -2409,7 +2409,7 @@ mgr_node_set(struct batch_request *preq)
 		}
 	} else {
 		/* Else one and only one vnode */
-		pnode = find_nodebyname(nodename);
+		pnode = find_nodebyname(nodename, LOCK);
 	}
 
 	if (pnode == NULL) {
@@ -2508,6 +2508,8 @@ mgr_node_set(struct batch_request *preq)
 					PBS_EVENTCLASS_NODE, pnode->nd_name, NULL);
 			}
 		}
+		node_save_db(pnode);
+
 		if (numnodes == 1)
 			break;	/* just the one vnode */
 		else if (preq->rq_ind.rq_manager.rq_objtype == MGR_OBJ_HOST) {
@@ -2516,7 +2518,7 @@ mgr_node_set(struct batch_request *preq)
 			/* next vnode under the Mom */
 			if (++momidx >= ((mom_svrinfo_t *)(pmom->mi_data))->msr_numvnds)
 				break;	/* all down */
-			pnode = ((mom_svrinfo_t *)(pmom->mi_data))->msr_children[momidx];
+			pnode = GET_NODEBYINDX_LOCKED(((mom_svrinfo_t *)(pmom->mi_data))->msr_children, momidx);
 			if ((strcmp(plist->al_name, ATTR_NODE_state) == 0) && (plist->al_op == INCR)) {
 				/* Marking nodes offline.  We should only mark the children vnodes
 				 * as offline if no other mom that reports the vnodes are up.
@@ -2542,7 +2544,7 @@ mgr_node_set(struct batch_request *preq)
 		} else {
 			if (++i == svr_totnodes)
 				break;	/* all done */
-			pnode = pbsndlist[i];	/* next vnode in array */
+			pnode = GET_NODEBYINDX_LOCKED(pbsndlist, i);	/* next vnode in array */
 		}
 	} /*bottom of the while()*/
 
@@ -2680,7 +2682,7 @@ mgr_node_unset(struct batch_request *preq)
 			/* found mom, set number of and first vnode */
 			numnodes = ((mom_svrinfo_t *)(pmom->mi_data))->msr_numvnds;
 			momidx = 0;
-			pnode = ((mom_svrinfo_t *)(pmom->mi_data))->msr_children[momidx];
+			pnode = GET_NODEBYINDX_LOCKED(((mom_svrinfo_t *)(pmom->mi_data))->msr_children, momidx);
 		} else {
 			/* no such Mom */
 			req_reject(PBSE_UNKNODE, 0, preq);
@@ -2695,7 +2697,7 @@ mgr_node_unset(struct batch_request *preq)
 
 		if ((pbsndlist != NULL) && svr_totnodes) {
 			nodename = all_nodes;
-			pnode = pbsndlist[0];
+			pnode = GET_NODEBYINDX_LOCKED(pbsndlist, 0);
 			numnodes = svr_totnodes;
 		}
 		else { /* specified server has no nodes in its node table */
@@ -2703,7 +2705,7 @@ mgr_node_unset(struct batch_request *preq)
 		}
 
 	} else {
-		pnode = find_nodebyname(nodename);
+		pnode = find_nodebyname(nodename, LOCK);
 	}
 
 	if (pnode == NULL) {
@@ -2855,16 +2857,18 @@ mgr_node_unset(struct batch_request *preq)
 					PBS_EVENTCLASS_NODE, pnode->nd_name, NULL);
 			}
 		}
+		node_save_db(pnode);
+
 		if (numnodes == 1)
 			break;
 		if (preq->rq_ind.rq_manager.rq_objtype == MGR_OBJ_HOST) {
 			if (++momidx >= ((mom_svrinfo_t *)(pmom->mi_data))->msr_numvnds)
 				break;
-			pnode =((mom_svrinfo_t *)(pmom->mi_data))->msr_children[momidx];
+			pnode = GET_NODEBYINDX_LOCKED(((mom_svrinfo_t *)(pmom->mi_data))->msr_children, momidx);
 		} else {
 			if (++i == svr_totnodes)
 				break;
-			pnode = pbsndlist[i];
+			pnode = GET_NODEBYINDX_LOCKED(pbsndlist, i);
 		}
 	} /* bottom of the while() */
 
@@ -3113,7 +3117,6 @@ int
 create_pbs_node2(char *objname, svrattrl *plist, int perms, int *bad, struct pbsnode **rtnpnode, int nodup, int allow_unkresc)
 {
 	struct pbsnode	*pnode;
-	struct pbsnode **tmpndlist;
 	int		ntype;		/* node type, always PBS */
 	char		*pc;
 	char		*phost;		/* trial host name */
@@ -3153,7 +3156,7 @@ create_pbs_node2(char *objname, svrattrl *plist, int perms, int *bad, struct pbs
 		return (rc);
 
 
-	if ((pnode=find_nodebyname(pname)) == NULL) {
+	if ((pnode = find_nodebyname(pname, NO_LOCK)) == NULL) {
 
 		/* need to create the pbs_node entry */
 
@@ -3163,21 +3166,6 @@ create_pbs_node2(char *objname, svrattrl *plist, int perms, int *bad, struct pbs
 			return (PBSE_SYSTEM);
 		}
 
-		/* expand pbsndlist array exactly svr_totnodes long*/
-		tmpndlist = (struct pbsnode **)realloc(pbsndlist,
-			sizeof(struct pbsnode*) * (svr_totnodes + 1));
-
-		if (tmpndlist != NULL) {
-			/*add in the new entry etc*/
-			pbsndlist = tmpndlist;
-			pnode->nd_index = svr_totnodes;
-			pnode->nd_arr_index = svr_totnodes; /* this is only in mem, not from db */
-			pbsndlist[svr_totnodes++] = pnode;
-		} else {
-			free_pnode(pnode);
-			free(pname);
-			return (PBSE_SYSTEM);
-		}
 		if (initialize_pbsnode(pnode, pname, ntype) != PBSE_NONE) {
 			svr_totnodes--;
 			free_pnode(pnode);
@@ -3194,21 +3182,7 @@ create_pbs_node2(char *objname, svrattrl *plist, int perms, int *bad, struct pbs
 			return (PBSE_SYSTEM);
 		}
 
-		/* create node tree if not already done */
-		if (node_tree == NULL ) {
-			node_tree = create_tree(AVL_NO_DUP_KEYS, 0);
-			if (node_tree == NULL ) {
-				svr_totnodes--;
-				free_pnode(pnode);
-				free(pname);
-				return (PBSE_SYSTEM);
-			}
-		}
-
-		/* add to node tree */
-		if (tree_add_del(node_tree, pname, pnode, TREE_OP_ADD) != 0) {
-			svr_totnodes--;
-			free_pnode(pnode);
+		if (update_node_cache(pnode) != 0) {
 			free(pname);
 			return (PBSE_SYSTEM);
 		}
@@ -3434,10 +3408,8 @@ create_pbs_node2(char *objname, svrattrl *plist, int perms, int *bad, struct pbs
 
 	/*
 	 * Since we are "creating" new node, it would require saving to the database.
-	 * Therefore, we need to set the flag "NODE_UPDATE_OTHERS" so that a later
-	 * call to save_nodes_db will save this node as well.
 	 */
-	pnode->nd_modified = NODE_UPDATE_OTHERS;
+	node_save_db(pnode);
 
 	if (rtnpnode != NULL)
 		*rtnpnode = pnode;
@@ -3593,7 +3565,7 @@ struct batch_request *preq;
 		}
 
 	} else {
-		pnode = find_nodebyname(nodename);
+		pnode = find_nodebyname(nodename, NO_LOCK);
 	}
 
 	if (pnode == NULL) {

@@ -172,19 +172,66 @@ extern int write_single_node_state(struct pbsnode *np);
 
 static void	remove_node_topology(char *);
 
+int
+update_node_cache(pbs_node *pnode)
+{
+	struct pbsnode **tmpndlist;
+
+	DBPRT(("Entering %s", __func__))
+
+	/* create node tree if not already done */
+	if (node_tree == NULL ) {
+		node_tree = create_tree(AVL_NO_DUP_KEYS, 0);
+		if (node_tree == NULL ) {
+			free_pnode(pnode);
+			return (PBSE_SYSTEM);
+		}
+	}
+
+	if (tree_add_del(node_tree, pnode->nd_name, pnode, TREE_OP_ADD) != 0) {
+		DBPRT(("Addition to node tree has failed"))
+		free_pnode(pnode);
+		return (PBSE_SYSTEM);
+	}
+
+	/* expand pbsndlist array if not sufficient*/
+	if (pbsndlist_sz <= svr_totnodes) {
+		tmpndlist = (struct pbsnode **)realloc(pbsndlist,
+			sizeof(struct pbsnode*) * (svr_totnodes * 2 + 1));
+
+		if (tmpndlist != NULL) {
+			pbsndlist = tmpndlist;
+		} else {
+			free_pnode(pnode);
+			return (PBSE_SYSTEM);
+		}
+		pbsndlist_sz = svr_totnodes * 2 + 1;
+	}
+	/*add in the new entry etc*/
+	pnode->nd_index = svr_totnodes;
+	pnode->nd_arr_index = svr_totnodes; /* this is only in mem, not from db */
+	pbsndlist[svr_totnodes++] = pnode;
+
+	return 0;
+}
+
 /**
  * @brief
  * 		find_nodebyname() - find a node host by its name
  * @param[in]	nodename	- node being searched
- *
+ * @param[in]	nd_savetm	- timestamp of node save time
+ * @param[in]	lock		- whether db row has to be locked
  * @return	pbsnode
  * @retval	NULL	- failure
  */
 
-struct pbsnode	  *find_nodebyname(nodename)
-char *nodename;
+struct pbsnode *
+refresh_node(char *nodename, char * nd_savetm, int lock)
 {
 	char		*pslash;
+	struct pbsnode *pnode = NULL;
+
+	DBPRT(("Entering %s", __func__))
 
 	if (nodename == NULL)
 		return NULL;
@@ -192,10 +239,38 @@ char *nodename;
 		nodename++;	/* skip over leading paren */
 	if ((pslash = strchr(nodename, (int)'/')) != NULL)
 		*pslash = '\0';
-	if (node_tree == NULL)
-		return NULL;
 
-	return ((struct pbsnode *) find_tree(node_tree, nodename));
+	if (node_tree)
+		pnode = find_tree(node_tree, nodename);
+
+	if (pnode == NULL) {
+		if ((pnode = node_recov_db(nodename, pnode, lock)) != NULL) {
+			if (update_node_cache(pnode) != 0)
+				return NULL;
+		}
+	} else if (!nd_savetm || strcmp(nd_savetm, pnode->nd_savetm) != 0) {
+		/* if node had changed in db */
+		pnode = node_recov_db(nodename, pnode, lock);
+	}
+
+	return pnode;
+}
+
+/**
+ * @brief
+ * 		find_nodebyname() - find a node host by its name
+ * @param[in]	nodename	- node being searched
+ * @param[in]	lock		- whether db row has to be locked
+ *
+ * @return	pbsnode
+ * @retval	NULL	- failure
+ */
+
+struct pbsnode *
+find_nodebyname(char *nodename, int lock)
+{
+	DBPRT(("Entering %s", __func__))
+	return refresh_node(nodename, NULL, lock);
 }
 
 
@@ -331,16 +406,53 @@ chk_characteristic(struct pbsnode *pnode, int *pneed_todo)
 }
 
 int
-encode_resc_assn(struct pbsnode *pnode)
+pre_nodejob_query(struct pbsnode *pnode)
+{
+	resource   *prsc;
+	attribute    *pattr = &pnode->nd_attr[(int)ND_ATR_ResourceAssn];
+
+	/* clear all resc_assn values before reading afresh */
+	for (prsc = (resource *)GET_NEXT(pattr->at_val.at_list);
+			prsc != NULL;
+			prsc = (resource *)GET_NEXT(prsc->rs_link)) {
+		int rc;
+		if ((rc = prsc->rs_defin->rs_decode(&prsc->rs_value,
+				ATTR_rescassn, prsc->rs_defin->rs_name,
+							NULL)) != 0)
+			return rc;
+	}
+	/* clear the joblist */
+	if (pnode->job_list) {
+		free(pnode->job_list->job_str);
+		free(pnode->job_list);
+	}
+	pnode->job_list = NULL;
+	return 0;
+}
+
+void
+post_nodejob_query(struct pbsnode *pnode)
+{
+	resource   *prsc;
+	attribute    *pattr = &pnode->nd_attr[(int)ND_ATR_ResourceAssn];
+
+	/* set the flags on another pass */
+	for (prsc = (resource *)GET_NEXT(pattr->at_val.at_list);
+			prsc != NULL;
+			prsc = (resource *)GET_NEXT(prsc->rs_link)) {
+		prsc->rs_value.at_flags |= ATR_VFLAG_SET;
+	}
+}
+
+int
+encode_nodejob(struct pbsnode *pnode)
 {
 	pbs_db_nodejob_info_t	*db_obj;
 	pbs_db_obj_info_t	obj;
-	resource   *prsc;
-	attribute    *pattr = &pnode->nd_attr[(int)ND_ATR_ResourceAssn];
 	void		*state = NULL;
 	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
 
-	DBPRT(("----------------Entering encode_resc_assn()------------"))
+	DBPRT(("----------------Entering encode_nodejob()------------"))
 
 	/* start a transaction */
 	if (pbs_db_begin_trx(conn, 0, 0) != 0)
@@ -348,7 +460,7 @@ encode_resc_assn(struct pbsnode *pnode)
 
 	db_obj = initialize_nodejob_db_obj(pnode->nd_name, NULL, 0);
 
-	/* get jobs from DB for this instance of server, by port and address */
+	/* get jobs from DB for this node */
 	obj.pbs_db_obj_type = PBS_DB_NODEJOB;
 	obj.pbs_db_un.pbs_db_nodejob = db_obj;
 
@@ -361,17 +473,9 @@ encode_resc_assn(struct pbsnode *pnode)
 		return (-1);
 	}
 
-	for (prsc = (resource *)GET_NEXT(pattr->at_val.at_list);
-			prsc != NULL;
-			prsc = (resource *)GET_NEXT(prsc->rs_link)) {
-		int rc;
-		//prsc->rs_value.at_flags &= ~ATR_VFLAG_SET;
-		if ((rc = prsc->rs_defin->rs_decode(&prsc->rs_value,
-				ATTR_rescassn, prsc->rs_defin->rs_name,
-							NULL)) != 0)
-			return rc;
-	}
+	pre_nodejob_query(pnode);
 
+	/* Read attributes from database */
 	while (pbs_db_cursor_next(conn, state, &obj) == 0) {
 		if (nodejob_db_to_attrlist(pnode, db_obj) != 0) {
 			sprintf(log_buffer, "nodejob_db_to_attrlist failed for node: %s",
@@ -383,11 +487,7 @@ encode_resc_assn(struct pbsnode *pnode)
 		pbs_db_reset_obj(&obj);
 	}
 
-	for (prsc = (resource *)GET_NEXT(pattr->at_val.at_list);
-			prsc != NULL;
-			prsc = (resource *)GET_NEXT(prsc->rs_link)) {
-		prsc->rs_value.at_flags |= ATR_VFLAG_SET;
-	}
+	post_nodejob_query(pnode);
 
 	pbs_db_cursor_close(conn, state);
 
@@ -545,6 +645,7 @@ initialize_pbsnode(struct pbsnode *pnode, char *pname, int ntype)
 	if (pnode->nd_moms == NULL)
 		return (PBSE_SYSTEM);
 	pnode->nd_nummslots = 1;
+	pnode->job_list = NULL;
 
 	/* first, clear the attributes */
 
@@ -746,6 +847,7 @@ free_pnode(struct pbsnode *pnode)
 		(void)free(pnode->nd_hostname);
 		(void)free(pnode->nd_moms);
 		(void)free(pnode); /* delete the pnode from memory */
+		pnode = NULL;
 	}
 }
 
@@ -937,8 +1039,6 @@ process_host_name_part(char *objname, svrattrl *plist, char **pname, int *ntype)
 	return  (0);				/* function successful    */
 }
 
-static char *nodeerrtxt = "Node description file update failed";
-
 /**
  * @brief
  *		Static function to update the specified mom in the db. If the
@@ -968,8 +1068,6 @@ save_nodes_db_mom(mominfo_t *pmom)
 	struct pbsnode *np;
 	pbs_list_head wrtattr;
 	mom_svrinfo_t *psvrm;
-	int	isoff;
-	int	hascomment;
 	int	nchild;
 
 	CLEAR_HEAD(wrtattr);
@@ -989,31 +1087,11 @@ save_nodes_db_mom(mominfo_t *pmom)
 		}
 
 		if (np->nd_modified & NODE_UPDATE_OTHERS) {
-			DBPRT(("Saving node %s into the database\n", np->nd_name))
 			if (node_save_db(np) != 0) {
 				log_event(PBSEVENT_ADMIN, PBS_EVENTCLASS_SERVER,
-					LOG_WARNING, "nodes", nodeerrtxt);
+					LOG_WARNING, __func__, "node_save_db() failed");
 				return (-1);
 			}
-			/*
-			 * node record were deleted
-			 * so add state and comments only if set
-			 */
-			isoff = np->nd_state &
-				(INUSE_OFFLINE | INUSE_OFFLINE_BY_MOM | INUSE_SLEEP);
-
-			hascomment = (np->nd_attr[(int) ND_ATR_Comment].at_flags &
-				(ATR_VFLAG_SET | ATR_VFLAG_DEFLT)) == ATR_VFLAG_SET;
-
-			if (isoff)
-				np->nd_modified |= NODE_UPDATE_STATE;
-
-			if (hascomment)
-				np->nd_modified |= NODE_UPDATE_COMMENT;
-
-			write_single_node_state(np);
-		} else if (np->nd_modified & NODE_UPDATE_MOM) {
-			write_single_node_mom_attr(np);
 		}
 	}
 
@@ -1847,7 +1925,7 @@ fix_indirect_resc_targets(struct pbsnode *psourcend, resource *psourcerc, int in
 	pn = psourcerc->rs_value.at_val.at_str;
 	if ((pn == NULL) ||
 		(*pn != '@') ||
-		((pnode = find_nodebyname(pn+1)) == NULL)) {
+		((pnode = find_nodebyname(pn+1, LOCK)) == NULL)) {
 		sprintf(log_buffer,
 			"resource %s on vnode points to invalid vnode %s",
 			psourcerc->rs_defin->rs_name, pn);
@@ -1890,6 +1968,7 @@ fix_indirect_resc_targets(struct pbsnode *psourcend, resource *psourcerc, int in
 			ptargetrc->rs_value.at_flags &= ~ATR_VFLAG_TARGET;
 	}
 
+	node_save_db(pnode);
 	return 0;
 }
 
@@ -2002,7 +2081,7 @@ fix_indirectness(resource *presc, struct pbsnode *pnode, int doit)
 
 			/* target vnode must be known unless the Server is recovering */
 			/* the value (at_str) is "@vnodename", so skip over the '@'   */
-			ptargetnd = find_nodebyname(presc->rs_value.at_val.at_str+1);
+			ptargetnd = find_nodebyname(presc->rs_value.at_val.at_str+1, LOCK);
 			if (ptargetnd == NULL) {
 				if (! recover_ok)
 					return (PBSE_UNKNODE);
@@ -2036,6 +2115,7 @@ fix_indirectness(resource *presc, struct pbsnode *pnode, int doit)
 						return PBSE_SYSTEM;
 				}
 			}
+			node_save_db(pnode);
 
 		} else {
 
@@ -2378,7 +2458,7 @@ is_vnode_up(char *nodename)
 {
 	struct pbsnode	*np;
 
-	np = find_nodebyname(nodename);
+	np = find_nodebyname(nodename, NO_LOCK);
 	if ((np == NULL) ||
 		((np->nd_state & (INUSE_OFFLINE | INUSE_OFFLINE_BY_MOM | INUSE_DOWN | INUSE_DELETED | INUSE_STALE)) != 0))
 		return 0;	/* vnode is not up */

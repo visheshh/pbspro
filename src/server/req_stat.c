@@ -113,7 +113,7 @@ extern int status_nodeattrib(svrattrl *, attribute_def *, struct pbsnode *,
 	int, int, pbs_list_head *, int *);
 
 extern int svr_chk_histjob(job *);
-extern int encode_resc_assn(struct pbsnode *pnode);
+extern int encode_nodejob(struct pbsnode *pnode);
 
 
 
@@ -547,7 +547,7 @@ get_all_db_queues() {
 		return (1);
 
 	sprintf(log_buffer, "Refreshed %d queues", count);
-	log_err(-1, __func__, log_buffer);
+	log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER, LOG_DEBUG, msg_daemonname, log_buffer);
 
 	if (pque)
 		strcpy(ques_from_time, pque->qu_savetm);
@@ -555,6 +555,67 @@ get_all_db_queues() {
 	return 0;
 }
 
+/**
+ * @brief
+ * 		Get all the nodes from database which are newly added/modified
+ * 		by other servers after the given time interval.
+ *
+ * @return	0 - success
+ * 		1 - fail/error
+ */
+int
+get_all_db_nodes() {
+	pbs_db_node_info_t	dbnode;
+	pbs_db_obj_info_t	dbobj;
+	pbs_db_conn_t		*conn = (pbs_db_conn_t *) svr_db_conn;
+	pbs_db_query_options_t opts;
+	static char nodes_from_time[DB_TIMESTAMP_LEN + 1] = {0};
+	pbs_node *pnode = NULL;
+	void *cur_state = NULL;
+	int rc_cur = 0;
+
+	DBPRT(("Entering %s", __func__))
+
+	if (pbs_db_begin_trx(conn, 0, 0) !=0) {
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return (1);
+	}
+
+	/* fill in options */
+	opts.flags = 0;
+	opts.timestamp = nodes_from_time;
+	dbobj.pbs_db_obj_type = PBS_DB_NODE;
+	dbobj.pbs_db_un.pbs_db_node = &dbnode;
+	dbnode.attr_list.attributes = NULL;
+
+	cur_state = pbs_db_cursor_init(conn, &dbobj, &opts);
+	if (cur_state == NULL) {
+		sprintf(log_buffer, "%s", (char *) conn->conn_db_err);
+		log_err(-1, __func__, log_buffer);
+		pbs_db_cursor_close(conn, cur_state);
+		(void) pbs_db_end_trx(conn, PBS_DB_ROLLBACK);
+		return (1);
+	}
+
+	while ((rc_cur = pbs_db_cursor_next(conn, cur_state, &dbobj)) == 0) {
+		if ((pnode = refresh_node(dbnode.nd_name, dbnode.nd_savetm, NO_LOCK)) == NULL) {
+			sprintf(log_buffer, "Failed to refresh node %s", dbnode.nd_name);
+			log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, LOG_NOTICE, msg_daemonname, log_buffer);
+		}
+		pbs_db_reset_obj(&dbobj);
+	}
+
+	pbs_db_cursor_close(conn, cur_state);
+	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
+		return (1);
+
+	if (pnode)
+		if (strncmp(pnode->nd_savetm, nodes_from_time, DB_TIMESTAMP_LEN) > 0)
+			strcpy(nodes_from_time, pnode->nd_savetm);
+		
+
+	return 0;
+}
 
 /**
  * @brief
@@ -760,7 +821,7 @@ req_stat_node(struct batch_request *preq)
 	if ((*name == '\0') || (*name =='@'))
 		type = 1;
 	else {
-		pnode = find_nodebyname(name);
+		pnode = find_nodebyname(name, NO_LOCK);
 		if (pnode == NULL) {
 			req_reject(PBSE_UNKNODE, 0, preq);
 			return;
@@ -775,7 +836,7 @@ req_stat_node(struct batch_request *preq)
 		rc = status_node(pnode, preq, &preply->brp_un.brp_status);
 
 	} else {			/* get status of all nodes */
-
+		get_all_db_nodes();
 		for (i = 0; i < svr_totnodes; i++) {
 			pnode = pbsndlist[i];
 
@@ -829,8 +890,8 @@ status_node(struct pbsnode *pnode, struct batch_request *preq, pbs_list_head *ps
 	if ((preq->rq_perm & ATR_DFLAG_RDACC) == 0)
 		return (PBSE_PERM);
 
-	/* Read node job table and encode Resc_assigned */
-	encode_resc_assn(pnode);
+	/* Read node job table and encode attribute values */
+	encode_nodejob(pnode);
 
 	/* sync state attribute with nd_state */
 
