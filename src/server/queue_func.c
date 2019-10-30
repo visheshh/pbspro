@@ -250,17 +250,6 @@ que_purge(pbs_queue *pque)
 		}
 	}
 
-	/* delete queue from database */
-	/*strcpy(dbque.qu_name, pque->qu_qs.qu_name);
-	obj.pbs_db_obj_type = PBS_DB_QUEUE;
-	obj.pbs_db_un.pbs_db_que = &dbque;
-	if (pbs_db_delete_obj(conn, &obj) != 0) {
-		(void)sprintf(log_buffer,
-			"delete of que %s from datastore failed",
-			pque->qu_qs.qu_name);
-		log_err(errno, "queue_purge", log_buffer);
-	}*/
-
 	/* for multi-server, update queue and mark it as deleted */
 	strcpy(dbque.qu_name, pque->qu_qs.qu_name);
 	dbque.qu_deleted = Q_Deleted;
@@ -463,6 +452,7 @@ action_queue_partition(attribute *pattr, void *pobj, int actmode)
 	if (((pbs_queue *)pobj)->qu_qs.qu_type  == QTYPE_RoutePush)
 		return PBSE_ROUTE_QUE_NO_PARTITION;
 
+	get_all_db_nodes();
 	for (i=0; i < svr_totnodes; i++) {
 		if (pbsndlist[i]->nd_pque) {
 			if (strcmp(pbsndlist[i]->nd_pque->qu_qs.qu_name, ((pbs_queue *) pobj)->qu_qs.qu_name) == 0) {

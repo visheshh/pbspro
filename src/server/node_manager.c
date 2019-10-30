@@ -2845,6 +2845,7 @@ deallocate_job(mominfo_t *pmom, job *pjob)
 	if ((jobid == NULL) || (*jobid == '\0'))
 		return;
 
+	get_all_db_nodes();
 	for (i = 0; i < svr_totnodes; i++) {
 		pbsnode *pnode;
 
@@ -3176,8 +3177,8 @@ cross_link_mom_vnode(struct pbsnode *pnode, mominfo_t *pmom)
 		node_attr_def[(int) ND_ATR_Mom].at_set(
 			&pnode->nd_attr[(int) ND_ATR_Mom],
 			&tmpmom, INCR);
-		if (pnode->nd_modified != NODE_UPDATE_OTHERS)
-			pnode->nd_modified = NODE_UPDATE_MOM; /* since we modified nd_nummoms, save it */
+		if (!(pnode->nd_modified & NODE_UPDATE_OTHERS))
+			pnode->nd_modified |= NODE_UPDATE_MOM; /* since we modified nd_nummoms, save it */
 		node_attr_def[(int) ND_ATR_Mom].at_free(&tmpmom);
 	}
 
@@ -6030,13 +6031,10 @@ cvt_nodespec_to_select(char *str, char **cvt_bp, size_t *cvt_lenp, attribute *pa
 		/* 4. now need to see if any property matches a node name */
 
 		for (walkprop = prop; walkprop; walkprop = walkprop->next) {
-			for (i=0; i<svr_totnodes; i++) {
-				if (pbsndlist[i]->nd_state & INUSE_DELETED)
-					continue;
-				if (strcasecmp(pbsndlist[i]->nd_name, walkprop->name) == 0) {
+			pbs_node *pnode;
+			if ((pnode = find_nodebyname(walkprop->name, NO_LOCK)) != NULL) {
+				if (!(pnode->nd_state & INUSE_DELETED))
 					walkprop->mark = 0;
-					break;
-				}
 			}
 		}
 		/* 5. now turn each property into "property=True" unless */
@@ -7346,6 +7344,7 @@ free_resvNodes(resc_resv *presv)
 	pbsnode_list_t *pnl_next;
 
 	DBPRT(("%s: entered\n", __func__))
+	get_all_db_nodes();
 	for (i=0; i<svr_totnodes; i++) {
 		pnode = pbsndlist[i];
 
@@ -7506,8 +7505,6 @@ adj_resc_on_node(void *obj, int is_resv, char *noden, enum batch_op op, resource
 		pjob = (job*)obj;
 		db_obj = initialize_nodejob_db_obj(noden, pjob->ji_qs.ji_jobid, is_resv);
 	}
-
-	DBPRT(("ji_state: %d, ji_substate: %d", ((job*)obj)->ji_qs.ji_state, ((job*)obj)->ji_qs.ji_substate))
 
 	if (nodejob_recov_db(db_obj) != 0)
 		return PBSE_INTERNAL;
@@ -8222,7 +8219,7 @@ set_last_used_time_node(void *pobj, int type)
 				snprintf(str_val, sizeof(str_val), "%d", time_int_val);
 				set_attr_svr(&(pnode->nd_attr[(int)ND_ATR_last_used_time]),
 						&node_attr_def[(int) ND_ATR_last_used_time], str_val);
-				pnode->nd_modified = NODE_UPDATE_OTHERS;
+				pnode->nd_modified |= NODE_UPDATE_OTHERS;
 			}
 			node_save_db(pnode);
 		}
