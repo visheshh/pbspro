@@ -669,47 +669,55 @@ tryagain:
 
 		DBG_TRACE_SHARD((stderr, "Selected server index %d, srv=%s:%d, state=%d, ", srv_index, pbs_conf.psi[srv_index]->name, pbs_conf.psi[srv_index]->port, connection[channel].ch_shards[srv_index]->state))
 
-		if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_FAILED) {
+		if (!connection[channel].conn_exists) {
+			if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_FAILED) {
 
-			if (time(0) - connection[channel].ch_shards[srv_index]->state_change_time > 60) {
-				/* it is possible service is back up now, reset state try again */
-				connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_DOWN;
-				connection[channel].ch_shards[srv_index]->state_change_time = time(0);
-			} 
-			connection[channel].ch_shards[srv_index]->sd = -1;
-
-			connection[channel].shard_context = -1;
-			DBG_TRACE_SHARD((stderr, "Failed!\n"))
-			
-			goto tryagain;
-
-		} else if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_DOWN) {
-			/* connect and authenticate */
-			
-			sd = internal_tcp_connect(channel, pbs_conf.psi[srv_index]->name, pbs_conf.psi[srv_index]->port, NULL);
-			if (sd == -1) {
-				DBG_TRACE_SHARD((stderr, "Connect returned -1\n"))
-			   /* connection failed, check the error return 
-				* TODO: if shard is down, try the next, if shard returned error, do not try next
-				* we need to note down about the failure, so we do not try all the time
-				*/
-				connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_FAILED;
+				if (time(0) - connection[channel].ch_shards[srv_index]->state_change_time > 60) {
+					/* it is possible service is back up now, reset state try again */
+					connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_DOWN;
+					connection[channel].ch_shards[srv_index]->state_change_time = time(0);
+				}
 				connection[channel].ch_shards[srv_index]->sd = -1;
-				connection[channel].ch_shards[srv_index]->state_change_time = time(0);
 
 				connection[channel].shard_context = -1;
+				DBG_TRACE_SHARD((stderr, "Failed!\n"))
 				
 				goto tryagain;
-			}
 
-			DBG_TRACE_SHARD((stderr, "Connected!\n"))
-			/* success */
-			connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_CONNECTED;
-			connection[channel].ch_shards[srv_index]->sd = sd;
-			connection[channel].ch_shards[srv_index]->state_change_time = time(0);
-			connection[channel].ch_socket = sd;
-		} else if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_CONNECTED) {
-			DBG_TRACE_SHARD((stderr, "already connected!\n"))
+			} else if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_DOWN) {
+				/* connect and authenticate */
+
+				sd = internal_tcp_connect(channel, pbs_conf.psi[srv_index]->name, pbs_conf.psi[srv_index]->port, NULL);
+				if (sd == -1) {
+					DBG_TRACE_SHARD((stderr, "Connect returned -1\n"))
+				   /* connection failed, check the error return
+					* TODO: if shard is down, try the next, if shard returned error, do not try next
+					* we need to note down about the failure, so we do not try all the time
+					*/
+					connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_FAILED;
+					connection[channel].ch_shards[srv_index]->sd = -1;
+					connection[channel].ch_shards[srv_index]->state_change_time = time(0);
+
+					connection[channel].shard_context = -1;
+
+					goto tryagain;
+				}
+
+				DBG_TRACE_SHARD((stderr, "Connected!\n"))
+				/* success */
+				connection[channel].ch_shards[srv_index]->state = SHARD_CONN_STATE_CONNECTED;
+				connection[channel].ch_shards[srv_index]->sd = sd;
+				connection[channel].ch_shards[srv_index]->state_change_time = time(0);
+				connection[channel].ch_socket = sd;
+			} else if (connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_CONNECTED) {
+				DBG_TRACE_SHARD((stderr, "already connected!\n"))
+			}
+		} else {
+			if ( connection[channel].ch_shards[srv_index]->state == SHARD_CONN_STATE_CONNECTED)
+				return  connection[channel].ch_shards[srv_index]->sd;
+			else {
+				goto tryagain;
+			}
 		}
 	}
 
