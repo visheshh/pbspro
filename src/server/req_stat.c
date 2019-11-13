@@ -89,7 +89,7 @@
 #include "pbs_sched.h"
 #include "pbs_share.h"
 
-#define QUE_REFRESH_TIME_PERIOD 86400
+#define REFRESH_TIME_PERIOD 86400
 
 /* Global Data Items: */
 
@@ -598,6 +598,8 @@ get_all_db_nodes() {
 		if ((pnode = refresh_node(dbnode.nd_name, dbnode.nd_savetm, NO_LOCK)) == NULL) {
 			sprintf(log_buffer, "Failed to refresh node %s", dbnode.nd_name);
 			log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, LOG_NOTICE, msg_daemonname, log_buffer);
+		} else if (strncmp(pnode->nd_savetm, nodes_from_time, DB_TIMESTAMP_LEN) > 0) {
+			strcpy(nodes_from_time, pnode->nd_savetm);
 		}
 		pbs_db_reset_obj(&dbobj);
 	}
@@ -605,11 +607,6 @@ get_all_db_nodes() {
 	pbs_db_cursor_close(conn, cur_state);
 	if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
 		return (1);
-
-	if (pnode)
-		if (strncmp(pnode->nd_savetm, nodes_from_time, DB_TIMESTAMP_LEN) > 0)
-			strcpy(nodes_from_time, pnode->nd_savetm);
-		
 
 	return 0;
 }
@@ -679,8 +676,8 @@ req_stat_que(struct batch_request *preq)
 
 		pque = (pbs_queue *)GET_NEXT(svr_queues);
 		while (pque) {
-			if((time(0) - pque->qu_last_refresh_time) >= QUE_REFRESH_TIME_PERIOD) {
-				/* this que hasn't refreshed since from long time(24 hrs.) hence need to check it's existence.
+			if((time(0) - pque->qu_last_refresh_time) >= REFRESH_TIME_PERIOD) {
+				/* this que hasn't refreshed since from long time. Hence need to check it's existence.
 				 * If it's been deleted by other server instance then remove from this server as well
 				 * and remove all the related jobs as well.
 				 */
@@ -690,8 +687,8 @@ req_stat_que(struct batch_request *preq)
 				if(pque == NULL) {
 					que_removed = 1;
 					/* This que has been deleted by other server! */
-					sprintf(log_buffer, "Now, Queue %s doesn't exist in the system", bak_que_name);
-					log_err(-1, __func__, log_buffer);
+					sprintf(log_buffer, "Queue %s doesn't exist in the system", bak_que_name);
+					log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_QUEUE, LOG_DEBUG, bak_que_name, log_buffer);
 				}
 			}
 			if(que_removed) {
@@ -839,6 +836,15 @@ req_stat_node(struct batch_request *preq)
 		get_all_db_nodes();
 		for (i = 0; i < svr_totnodes; i++) {
 			pnode = pbsndlist[i];
+
+			if((time(0) - pnode->nd_last_refresh_time) >= REFRESH_TIME_PERIOD) {
+				/* this node hasn't refreshed for long time, hence need to check it's existence.
+				 */
+				if ((pnode = node_recov_db(pnode->nd_name, pnode, 0)) == NULL) {
+					i--;
+					continue;
+				}
+			}
 
 			rc = status_node(pnode, preq,
 				&preply->brp_un.brp_status);

@@ -294,7 +294,8 @@ struct	pbsnode {
 	char		nd_creatm[DB_TIMESTAMP_LEN + 1];		/* time queue created */
 	char		nd_savetm[DB_TIMESTAMP_LEN + 1];		/* time queue last modified */
 	struct memcache_state	trx_status;
-	attribute		 nd_attr[ND_ATR_LAST];
+	time_t		nd_last_refresh_time;				/* node last refresh time */
+	attribute	nd_attr[ND_ATR_LAST];
 };
 typedef struct pbsnode pbs_node;
 
@@ -458,7 +459,7 @@ extern	void	setup_notification(void);
 extern  struct	pbssubn  *find_subnodebyname(char *);
 extern	struct	pbsnode  *find_nodebyname(char *, int);
 extern	struct	pbsnode  *refresh_node(char *, char *, int);
-extern	int update_node_cache(pbs_node *);
+extern	int update_node_cache(pbs_node *, int);
 extern	int get_all_db_nodes();
 extern	struct	pbsnode  *find_nodebyaddr(pbs_net_t);
 extern	void	free_prop_list(struct prop*);
