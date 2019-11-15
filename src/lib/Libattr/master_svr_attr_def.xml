@@ -1301,7 +1301,7 @@
    <attributes>	
    /* SRV_ATR_job_sort_formula */
 	<member_name><both>ATTR_job_sort_formula</both></member_name>
-	<member_at_decode>decode_str</member_at_decode>
+	<member_at_decode>decode_formula</member_at_decode>
 	<member_at_encode>encode_str</member_at_encode>
 	<member_at_set>set_str</member_at_set>
 	<member_at_comp>comp_str</member_at_comp>

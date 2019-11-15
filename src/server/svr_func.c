@@ -1735,9 +1735,6 @@ decode_formula(attribute *patr, char *name, char *rescn, char *val)
 
 	fclose(fp);
 
-	/* now that we have the data, the file may be removed */
-	remove(pathbuf);
-
 	/* remove the newline */
 	formula_buf[strlen(formula_buf)-1] = '\0';
 
