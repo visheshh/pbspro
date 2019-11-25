@@ -257,6 +257,7 @@ struct	pbs_job_list {
 	char	*job_str;
 	ulong buf_sz;
 	ulong offset;
+	ulong njobs;
 };
 
 union ndu_ninfo {
@@ -397,10 +398,7 @@ typedef enum node_topology_type ntt_t;
 
 #define PBSNODE_NTYPE_MASK	0xf		 /* relevant ntype bits */
 
-#define WRITE_NEW_NODESFILE	0x2 /*changed: deleted,ntype,or properties*/
-#define NODE_UPDATE_OTHERS          0x4  /* other attributes need to be updated */
-#define NODE_UPDATE_VNL             0x8  /* this vnode updated in vnl by Mom  */
-#define NODE_LOCKED                 0x40 /* indicate whether node is already locked in db for update*/
+#define NODE_LOCKED		0x1	/* indicate whether node is already locked in db for update*/
 
 
 #define NODE_SAVE_FULL  0
@@ -480,7 +478,8 @@ extern  void	   delete_mom_entry(mominfo_t *);
 extern  mominfo_t *create_svrmom_entry(char *, unsigned int, unsigned long *);
 extern  void	delete_svrmom_entry(mominfo_t *);
 extern  int	create_svrmom_struct(pbs_node *pnode);
-extern	mominfo_t *	recover_mom(pbs_net_t hostaddr, unsigned int port);
+extern  int	open_momstream(mominfo_t *, uint);
+extern	mominfo_t *	recover_mom(pbs_net_t, unsigned int, int);
 extern  int	legal_vnode_char(char, int);
 extern 	char	*parse_node_token(char *, int, int *, char *);
 extern  int	cross_link_mom_vnode(struct pbsnode *, mominfo_t *);
@@ -509,6 +508,7 @@ extern char *msg_daemonname;
 #define GET_NODEBYINDX_LOCKED(obj, idx)	find_nodebyname(obj[idx] ? obj[idx]->nd_name : NULL, LOCK)
 extern int node_save_db(struct pbsnode *pnode);
 extern int nodejob_recov_db(void *nj);
+extern int delete_nodejob_entry(job *pjob);
 extern int nodejob_update_attr_db(pbs_db_nodejob_info_t *dbnode);
 extern pbs_db_nodejob_info_t * initialize_nodejob_db_obj(char *nd_name, char *job_id, int is_resv);
 int nodejob_db_to_attrlist(struct pbsnode *pnode, pbs_db_nodejob_info_t *db_obj);

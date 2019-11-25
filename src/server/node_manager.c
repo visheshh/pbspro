@@ -2615,22 +2615,21 @@ static int
 deallocate_job_from_node(job *pjob, struct pbsnode *pnode)
 {
 	int              numcpus = 0;	/* for floating licensing */
-	int		 still_has_jobs; /* still jobs on this vnode */
 	struct	pbssubn	*np;
 	struct	jobinfo	*jp, *prev, *next;
+
+	DBPRT(("%s: entered\n", __func__))
 
 	if ((pjob == NULL) || (pnode == NULL)) {
 		return (0);
 	}
 
-	still_has_jobs = 0;
 	for (np = pnode->nd_psn; np; np = np->next) {
 
 		for (prev = NULL, jp = np->jobs; jp; jp = next) {
 			next = jp->next;
 			if (jp->job != pjob) {
 				prev = jp;
-				still_has_jobs = 1; /* another job still here */
 				continue;
 			}
 
@@ -2654,24 +2653,6 @@ deallocate_job_from_node(job *pjob, struct pbsnode *pnode)
 		if (np->jobs == NULL) {
 			np->inuse &= ~(INUSE_JOB|INUSE_JOBEXCL);
 		}
-	}
-	if (still_has_jobs) {
-		/* if the vnode still has jobs, then don't clear */
-		/* JOBEXCL */
-		if (pnode->nd_nsnfree > 0) {
-			/* some cpus free, clear "job-busy" state */
-			set_vnode_state(pnode, ~INUSE_JOB, Nd_State_And);
-		}
-	} else {
-		/* no jobs at all, clear both JOBEXCL and "job-busy" */
-		set_vnode_state(pnode,
-			~(INUSE_JOB|INUSE_JOBEXCL),
-			Nd_State_And);
-
-		/* call function to check and free the node from the */
-		/* prov list and reset wait_prov flag, if set */
-		if (pjob->ji_qs.ji_substate == JOB_SUBSTATE_PROVISION)
-			free_prov_vnode(pnode);
 	}
 
 	return (numcpus);
@@ -3438,11 +3419,6 @@ update2_to_vnode(vnal_t *pvnal, int new, mominfo_t *pmom, int *madenew, int from
 
 	if (!from_hook) {
 		for (i=0; i < ND_ATR_LAST; ++i) {
-			/* if this vnode has been updated earlier in this update2 */
-			/* then don't free anything but topology */
-			if ((i != ND_ATR_TopologyInfo) && (pnode->nd_modified & NODE_UPDATE_VNL))
-				continue;  /* seeing vnl update for node just updated, don't clear */
-
 			if (i != ND_ATR_ResourceAvail) {
 				if ((pnode->nd_attr[i].at_flags & (ATR_VFLAG_SET|ATR_VFLAG_DEFLT)) == (ATR_VFLAG_SET|ATR_VFLAG_DEFLT)) {
 					node_attr_def[i].at_free(&pnode->nd_attr[i]);
@@ -3459,13 +3435,9 @@ update2_to_vnode(vnal_t *pvnal, int new, mominfo_t *pmom, int *madenew, int from
 				}
 			}
 		}
-		/* Again, if the vnode has been updated in this cycle, */
-		/* don't reset sharing as it likely was set then       */
-		if ((pnode->nd_modified & NODE_UPDATE_VNL) == 0) {
-			pnode->nd_attr[(int)ND_ATR_Sharing].at_val.at_long = VNS_DFLT_SHARED;
-			pnode->nd_attr[(int)ND_ATR_Sharing].at_flags =
-				(ATR_VFLAG_SET |ATR_VFLAG_DEFLT);
-		}
+		pnode->nd_attr[(int)ND_ATR_Sharing].at_val.at_long = VNS_DFLT_SHARED;
+		pnode->nd_attr[(int)ND_ATR_Sharing].at_flags =
+			(ATR_VFLAG_SET |ATR_VFLAG_DEFLT);
 	}
 
 	/* set attributes/resources if not already non-default */
@@ -4230,7 +4202,7 @@ is_request(int stream, int version)
 		DBPRT(("%s: IS_HELLOSVR port %lu\n", __func__, port))
 
 		if ((pmom = tfind2(ipaddr, port, &ipaddrs)) == NULL)
-			if ((pmom = recover_mom(ipaddr, port)) == NULL)
+			if ((pmom = recover_mom(ipaddr, port, 0)) == NULL)
 				goto badcon;
 
 		log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE,
@@ -4607,10 +4579,6 @@ found:
 						if (pbs_conf.pbs_use_tcp == 0)
 							(void)rpp_io();
 					}
-					/* clear the NODE_UPDATE_VNL on all vnodes for this Mom */
-					/* It was set in update2_to_vnode() */
-					for (i=0; i<psvrmom->msr_numvnds; ++i)
-						(psvrmom->msr_children[i])->nd_modified &= ~NODE_UPDATE_VNL;
 
 					/* if multiple vnodes indicated (above) and
 					 * if the vnodes (except the first) have
@@ -4786,7 +4754,6 @@ found:
 			}
 
 			if (made_new_vnodes || cr_node) {
-				DBPRT(("Saving nodes to database"))
 				save_nodes_db(1, pmom); /* update the node database */
 			}
 			break;
@@ -6371,7 +6338,7 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 		pbsnode     *hw_pnd;	/* ptr to node */
 		pbsnode	    *hw_natvn;	/* pointer to "natural" vnode	     */
 		mominfo_t*   hw_mom;
-		int          hw_ncpus;	/* num of cpus needed from this node */
+		uint          hw_ncpus;	/* num of cpus needed from this node */
 		int	     hw_chunk;	/* non-zero if start of a chunk      */
 		int          hw_index;	/* index of job on Mom if hw_chunk   */
 		int	     hw_htcpu;	/* sum of cpus on this Mom, hw_chuhk */
@@ -6738,6 +6705,7 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 
 		for (i = 0; i < ndindex; ++i) {
 			int share_node;
+			struct pbssubn *lst_sn = NULL;
 
 			pnode = (phowl+i)->hw_pnd;
 
@@ -6764,12 +6732,8 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 					jp->job   = pjob;
 				}
 			} else {
-				struct pbssubn *lst_sn;
-				int ncpus;
-
-				lst_sn = NULL;
+				uint ncpus;
 				for (ncpus = 0; ncpus < (phowl+i)->hw_ncpus; ncpus++) {
-
 					while (snp->inuse != INUSE_FREE) {
 						if (snp->next)
 							snp = snp->next;
@@ -6786,8 +6750,7 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 								return PBSE_SYSTEM;
 							}
 							break;
-						} else
-							break; /* if last subnode, use it even if in use */
+						}
 					}
 
 					snp->inuse |= alloc_how;
@@ -6818,6 +6781,11 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 				}
 			}
 
+			/*
+			The rest of the code is moved to stat_nodes. This can be moved only after
+			storing info about whether the job has requested forced exclusive in
+			node-job table. For now job force exclusive node wont function
+			*/
 			share_node = pnode->nd_attr[(int)ND_ATR_Sharing].at_val.at_long;
 			if (share_node == (int)VNS_DFLT_EXCL || share_node == (int)VNS_DFLT_EXCLHOST) {
 				if (share_job != (int)VNS_IGNORE_EXCL) {
@@ -7011,10 +6979,9 @@ free_nodes(job *pjob)
 		}
 
 		for (ivnd = 0; ivnd < psvrmom->msr_numvnds; ++ivnd) {
-			pnode = GET_NODEBYINDX_LOCKED(psvrmom->msr_children, ivnd);
+			pnode = psvrmom->msr_children[ivnd];
 			still_has_jobs = 0;
 			for (np = pnode->nd_psn; np; np = np->next) {
-
 				for (prev=NULL, jp=np->jobs; jp; jp=next) {
 					next = jp->next;
 					if (jp->job != pjob) {
@@ -7048,24 +7015,12 @@ free_nodes(job *pjob)
 					np->inuse &= ~(INUSE_JOB|INUSE_JOBEXCL);
 				}
 			}
-			if (still_has_jobs) {
-				/* if the vnode still has jobs, then don't clear JOBEXCL */
-				if (pnode->nd_nsnfree > 0) {
-					/* some cpus free, clear "job-busy" state */
-					set_vnode_state(pnode, ~INUSE_JOB, Nd_State_And);
-				}
-			} else {
-				/* no jobs at all, clear both JOBEXCL and "job-busy" */
-				set_vnode_state(pnode,
-					~(INUSE_JOB|INUSE_JOBEXCL),
-					Nd_State_And);
-
+			if (!still_has_jobs) {
 				/* call function to check and free the node from the prov list
 				 and reset wait_prov flag, if set */
 				if (pjob->ji_qs.ji_substate == JOB_SUBSTATE_PROVISION)
 					free_prov_vnode(pnode);
 			}
-			node_save_db(pnode);
 		}
 		special_case = 0;
 	}
@@ -7974,7 +7929,6 @@ set_last_used_time_node(void *pobj, int type)
 				snprintf(str_val, sizeof(str_val), "%d", time_int_val);
 				set_attr_svr(&(pnode->nd_attr[(int)ND_ATR_last_used_time]),
 						&node_attr_def[(int) ND_ATR_last_used_time], str_val);
-				pnode->nd_modified |= NODE_UPDATE_OTHERS;
 			}
 			node_save_db(pnode);
 		}

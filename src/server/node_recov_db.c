@@ -159,6 +159,8 @@ db_to_svr_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 		pnode->nd_attr, (int) ND_ATR_LAST, 0)) != 0)
 		return -1;
 
+	mod_node_ncpus(pnode, get_ncpu_ct(pnode), ATR_ACTION_ALTER);
+
 	return 0;
 }
 
@@ -182,8 +184,6 @@ node_recov_db(char *nd_name, struct pbsnode *pnode, int lock)
 	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
 	pbs_db_node_info_t dbnode;
 	int rc = 0;
-
-	DBPRT(("Inside node_recov_db"))
 
 	strcpy(dbnode.nd_name, nd_name);
 	dbnode.nd_savetm[0] = '\0';
@@ -237,10 +237,8 @@ db_commit:
 		pnode->nd_modified |= NODE_LOCKED;
 		memcache_update_state(&pnode->trx_status, lock);
 	}
-
 	pbs_db_reset_obj(&obj);
 	pnode->nd_last_refresh_time = time(NULL);
-
 	return pnode;
 
 db_err:
@@ -315,14 +313,17 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 		if (node_attr_def[j].at_flags & ATR_DFLAG_NOSAVM)
 			continue;
 
+		if (!(pnode->nd_attr[j].at_flags & ATR_VFLAG_MODIFY))
+			continue;
+
 		(void) node_attr_def[j].at_encode(&pnode->nd_attr[j],
 		                                  &wrtattr,
 		                                  node_attr_def[j].at_name,
 		                                  NULL,
-		                                  ATR_ENCODE_SVR,
+		                                  ATR_ENCODE_DB,
 		                                  NULL);
 
-		node_attr_def[j].at_flags &= ~ATR_VFLAG_MODIFY;
+		pnode->nd_attr[j].at_flags &= ~ATR_VFLAG_MODIFY;
 	}
 
 	vnode_sharing = ((pnode->nd_attr[ND_ATR_Sharing].at_flags & ATR_VFLAG_SET)
@@ -353,7 +354,6 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 			/* check for pcpus if needed after loop end */
 			delete_link(&psvrl->al_link);
 			(void) free(psvrl);
-
 			continue;
 		}
 
@@ -363,8 +363,7 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 		if (psvrl->al_resc) {
 			attrs[count].attr_resc[sizeof(attrs[count].attr_resc) - 1] = '\0';
 			strncpy(attrs[count].attr_resc, psvrl->al_resc, sizeof(attrs[count].attr_resc));
-		}
-		else
+		} else
 			strcpy(attrs[count].attr_resc, "");
 		attrs[count].attr_value = strdup(psvrl->al_value);
 		attrs[count].attr_flags = psvrl->al_flags;
@@ -409,8 +408,6 @@ svr_to_db_node(struct pbsnode *pnode, pbs_db_node_info_t *pdbnd)
 		count++;
 	}
 	pdbnd->attr_list.attr_count = count;
-
-	pnode->nd_modified &= ~NODE_UPDATE_OTHERS;
 
 	return 0;
 }
@@ -466,7 +463,6 @@ node_save_db(struct pbsnode *pnode)
 
 	pbs_db_reset_obj(&obj);
 	pnode->nd_last_refresh_time = time(NULL);
-	pnode->nd_modified &= ~NODE_UPDATE_OTHERS;
 	if (pnode->nd_modified & NODE_LOCKED) {
 		if (pbs_db_end_trx(conn, PBS_DB_COMMIT) != 0)
 			goto db_err;

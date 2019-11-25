@@ -207,7 +207,8 @@ update_node_cache(pbs_node *pnode, int op)
 			pnode->nd_arr_index = svr_totnodes; /* this is only in mem, not from db */
 			DBPRT(("pbsndlist_sz: %d, svr_totnodes: %d", pbsndlist_sz, svr_totnodes))
 			pbsndlist[svr_totnodes++] = pnode;
-			create_svrmom_struct(pnode);
+			if (pnode->nd_nummoms == 0)
+				create_svrmom_struct(pnode);
 			break;
 
 		case TREE_OP_DEL:
@@ -333,11 +334,28 @@ save_characteristic(struct pbsnode *pnode)
 }
 
 int
+get_ncpu_ct(struct pbsnode *pnode)
+{
+	resource_def		*prd;
+	resource		*prc;
+	attribute		*pala;
+
+	pala = &pnode->nd_attr[(int)ND_ATR_ResourceAvail];
+	prd = find_resc_def(svr_resc_def, "ncpus", svr_resc_size);
+	prc = find_resc_entry(pala, prd);
+	if (prc)
+		return prc->rs_value.at_val.at_long;
+	return 0;
+}
+
+
+int
 pre_nodejob_query(struct pbsnode *pnode)
 {
 	resource   *prsc;
 	attribute    *pattr = &pnode->nd_attr[(int)ND_ATR_ResourceAssn];
 
+	pnode->nd_nsn = get_ncpu_ct(pnode);
 	pnode->nd_nsnfree = pnode->nd_nsn;
 
 	/* clear all resc_assn values before reading afresh */
@@ -350,18 +368,31 @@ pre_nodejob_query(struct pbsnode *pnode)
 							NULL)) != 0)
 			return rc;
 	}
-	/* clear the job_list */
-	if (pnode->job_list) {
-		free(pnode->job_list->job_str);
-		free(pnode->job_list);
+	/* initialize job_list */
+	if (pnode->job_list == NULL) {
+		pnode->job_list = malloc(sizeof(struct pbs_job_list));
+		pnode->job_list->job_str = malloc(1024);
+		pnode->job_list->job_str[0] = '\0';
+		pnode->job_list->buf_sz = 1024;
+		pnode->job_list->offset = 0;
+		pnode->job_list->njobs = 0;
+	} else {
+		pnode->job_list->job_str[0] = '\0';
+		pnode->job_list->offset = 0;
+		pnode->job_list->njobs = 0;
 	}
-	pnode->job_list = NULL;
-	/* clear the resv_list */
-	if (pnode->resv_list) {
-		free(pnode->resv_list->job_str);
-		free(pnode->resv_list);
+	/* initialize resv_list */
+	if (pnode->resv_list == NULL) {
+		pnode->resv_list = malloc(sizeof(struct pbs_job_list));
+		pnode->resv_list->job_str = malloc(1024);
+		pnode->resv_list->job_str[0] = '\0';
+		pnode->resv_list->buf_sz = 1024;
+		pnode->resv_list->offset = 0;
+	} else {
+		pnode->resv_list->job_str[0] = '\0';
+		pnode->resv_list->offset = 0;
+		pnode->resv_list->njobs = 0;
 	}
-	pnode->resv_list = NULL;
 	return 0;
 }
 
@@ -390,7 +421,7 @@ post_nodejob_query(struct pbsnode *pnode)
 			set_vnode_state2(pnode, ~(INUSE_JOB | INUSE_JOBEXCL), Nd_State_And, 0);
 	} else if (pnode->nd_nsnfree <= 0) {
 		set_vnode_state2(pnode, INUSE_JOB, Nd_State_Or, 0);
-	} else if (pnode->nd_nsnfree == pnode->nd_nsn) {
+	} else if (pnode->nd_nsnfree == pnode->nd_nsn || ((pnode->nd_nsnfree != pnode->nd_nsn) && (pnode->job_list->njobs != 1))) {
 		set_vnode_state2(pnode, ~(INUSE_JOB | INUSE_JOBEXCL), Nd_State_And, 0);
 	}
 }
@@ -402,8 +433,6 @@ encode_nodejob(struct pbsnode *pnode)
 	pbs_db_obj_info_t	obj;
 	void		*state = NULL;
 	pbs_db_conn_t *conn = (pbs_db_conn_t *) svr_db_conn;
-
-	DBPRT(("----------------Entering encode_nodejob()------------"))
 
 	/* start a transaction */
 	if (pbs_db_begin_trx(conn, 0, 0) != 0)
@@ -771,7 +800,6 @@ remove_mom_from_vnodes(mominfo_t *pmom)
 				}
 				pnode->nd_moms[imom] = NULL;
 				--pnode->nd_nummoms;
-				pnode->nd_modified |= NODE_UPDATE_OTHERS; /* since we modified nd_nummoms, flag for save */
 				/* remove (decr) Mom host from Mom attrbute */
 				(void)node_attr_def[(int)ND_ATR_Mom].at_set(
 					&pnode->nd_attr[(int)ND_ATR_Mom],
@@ -796,10 +824,18 @@ void
 free_pnode(struct pbsnode *pnode)
 {
 	if (pnode) {
-		(void)free(pnode->nd_name);
-		(void)free(pnode->nd_hostname);
-		(void)free(pnode->nd_moms);
-		(void)free(pnode); /* delete the pnode from memory */
+		free(pnode->nd_name);
+		free(pnode->nd_hostname);
+		free(pnode->nd_moms);
+		if (pnode->job_list) {
+			free(pnode->job_list->job_str);
+			free(pnode->job_list);
+		}
+		if (pnode->resv_list) {
+			free(pnode->resv_list->job_str);
+			free(pnode->resv_list);
+		}
+		free(pnode); /* delete the pnode from memory */
 		pnode = NULL;
 	}
 }
@@ -984,12 +1020,8 @@ process_host_name_part(char *objname, svrattrl *plist, char **pname, int *ntype)
 
 /**
  * @brief
- *		When called, this function will update
- *		all the nodes in the db. It will update the mominfo_time to the db
- *		and save all the nodes which has the NODE_UPDATE_OTHERS flag set. It
- *		saves the nodes by calling a helper function save_nodes_db_inner.
- *
- *  	The updates are done under a single transaction.
+ * 	Updates the mom info table.
+ *	The updates are done under a single transaction.
  *  	Upon successful conclusion the transaction is commited.
  *
  * @param[in]	changemodtime - flag to change the mom modification time or not
@@ -1117,7 +1149,7 @@ struct pbssubn *create_subnode(struct pbsnode *pnode, struct pbssubn *lstsn)
 
 	if(lstsn) /* If not null, then append new subnode directly to the last node */
 		lstsn->next = psubn;
-	else{
+	else {
 		nxtsn = &pnode->nd_psn;	   /* link subnode onto parent node's list */
 		while (*nxtsn)
 			nxtsn = &((*nxtsn)->next);
@@ -2111,7 +2143,6 @@ set_node_topology(attribute *new, void *pobj, int op)
 					 *	node's License and LicenseInfo attributes.
 					 */
 					clear_attr(ppnl, pnadl);
-					pnode->nd_modified |= NODE_UPDATE_OTHERS;
 					sockets_release(ppnli->at_val.at_long);
 					if (sockets_consume(node_nsockets) == 0) {
 						ppnl->at_val.at_char = ND_LIC_TYPE_locked;
@@ -2143,7 +2174,6 @@ set_node_topology(attribute *new, void *pobj, int op)
 					ppnl->at_val.at_char = ND_LIC_TYPE_locked;
 					ppnl->at_flags  |= ATR_VFLAG_SET |
 						ATR_VFLAG_MODIFY | ATR_VFLAG_MODCACHE;
-					pnode->nd_modified |= NODE_UPDATE_OTHERS;
 					sprintf(log_buffer, msg_sockets_initialized,
 						pnode->nd_name, node_nsockets, license_type,
 						node_nsockets == 1 ? "" : "s", ND_LIC_TYPE_locked);
@@ -2174,8 +2204,6 @@ set_node_topology(attribute *new, void *pobj, int op)
 					node_nsockets == 1 ? "" : "s", ND_LIC_TYPE_locked);
 				log_event(PBSEVENT_DEBUG3, PBS_EVENTCLASS_SERVER,
 					LOG_DEBUG, __func__, log_buffer);
-
-				pnode->nd_modified |= NODE_UPDATE_OTHERS;
 			} else {
 				/*
 				 * In this case, we don't have enough license for this node.
