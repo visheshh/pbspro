@@ -1160,6 +1160,9 @@ set_vnode_state2(struct pbsnode *pnode, unsigned long state_bits, enum vnode_sta
 	else
 		pnode = find_nodebyname(pnode->nd_name, LOCK);
 
+	if (!pnode)
+		return;
+
 	nd_prev_state = pnode->nd_state;
 	switch (type) {
 		case Nd_State_Set:
@@ -3493,7 +3496,6 @@ update2_to_vnode(vnal_t *pvnal, int new, mominfo_t *pmom, int *madenew, int from
 						LOG_ERR, pmom->mi_host, log_buffer);
 					continue; /* skip this attribute, go to next */
 				} else {
-
 					snprintf(log_buffer, sizeof(log_buffer),
 						"adding resource %s, type %d, in update for vnode %s", resc, psrp->vna_type,  pnode->nd_name);
 					log_event(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE,
@@ -3558,7 +3560,7 @@ update2_to_vnode(vnal_t *pvnal, int new, mominfo_t *pmom, int *madenew, int from
 							}
 						} else {
 							prs->rs_value.at_flags \
-							      |= ATR_VFLAG_DEFLT;
+							      |= ATR_VFLAG_DEFLT | ATR_VFLAG_MODIFY;
 						}
 						if (strcasecmp("ncpus", resc) == 0) {
 							/* if ncpus, adjust virtual/subnodes */
@@ -3808,9 +3810,9 @@ update2_to_vnode(vnal_t *pvnal, int new, mominfo_t *pmom, int *madenew, int from
 		}
 
 		/* clear stale, down, unknown bits in state */
-		set_vnode_state(pnode,
+		set_vnode_state2(pnode,
 			~states_to_clear,
-			Nd_State_And);
+			Nd_State_And, 0);
 		node_save_db(pnode);
 		return 0;
 	} else {
@@ -4489,14 +4491,13 @@ found:
 					if (prc == NULL)
 						prc = add_resource_entry(pala, prd);
 					if (((prc->rs_value.at_flags & ATR_VFLAG_SET) == 0) ||
-						((prc->rs_value.at_flags & ATR_VFLAG_DEFLT) != 0)) {
+						((prc->rs_value.at_flags & ATR_VFLAG_DEFLT))) {
 						mod_node_ncpus(np, i, ATR_ACTION_ALTER);
 						prc->rs_value.at_val.at_long = i;
 						prc->rs_value.at_flags |= (ATR_VFLAG_SET |
 							ATR_VFLAG_MODCACHE |
 							ATR_VFLAG_DEFLT | ATR_VFLAG_MODIFY);
 					}
-
 
 					/* available memory */
 					prd = find_resc_def(svr_resc_def, "mem", svr_resc_size);
@@ -4513,9 +4514,8 @@ found:
 							ATR_VFLAG_MODCACHE |
 							ATR_VFLAG_DEFLT | ATR_VFLAG_MODIFY);
 					}
-				node_save_db(np);
+					node_save_db(np);
 				}
-
 			}
 
 
@@ -4665,7 +4665,7 @@ found:
 						prc->rs_value.at_flags |=
 							(ATR_VFLAG_SET |
 							ATR_VFLAG_MODCACHE |
-							ATR_VFLAG_DEFLT | ATR_VFLAG_MODIFY);
+							ATR_VFLAG_MODIFY);
 					}
 					prd = find_resc_def(svr_resc_def, "mem",
 						svr_resc_size);
@@ -4679,7 +4679,7 @@ found:
 						prc->rs_value.at_val.at_size.atsv_shift = 10;
 						prc->rs_value.at_flags |= (ATR_VFLAG_SET |
 							ATR_VFLAG_MODCACHE |
-							ATR_VFLAG_DEFLT | ATR_VFLAG_MODIFY);
+							ATR_VFLAG_MODIFY);
 					}
 				}
 
@@ -6750,7 +6750,10 @@ set_nodes(void *pobj, int objtype, char *execvnod_in, char **execvnod_out, char 
 								return PBSE_SYSTEM;
 							}
 							break;
+						} else {
+							break;	/* if last subnode, use it even if in use */
 						}
+						
 					}
 
 					snp->inuse |= alloc_how;
