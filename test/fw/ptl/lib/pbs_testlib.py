@@ -1780,8 +1780,7 @@ class BatchUtils(object):
                 m = self.pbsobjattrval_re.match(l)
                 if m:
                     attr = m.group('attribute')
-                    if (attribs is None or attr.lower() in attribs
-                            or attr in attribs):
+                    if attribs is None or attr in attribs:
                         if attr in d:
                             d[attr] = d[attr] + "," + m.group('value')
                         else:
@@ -3323,7 +3322,7 @@ class PBSObject(object):
         self.dflt_attributes = defaults
         self.attropl = None
         self.custom_attrs = OrderedDict()
-        self.ctime = time.time()
+        self.ctime = int(time.time())
 
         self.set_attributes(attrs)
 
@@ -3486,7 +3485,6 @@ class PBSService(PBSObject):
         self._is_local = True
         self.launcher = None
         self.dyn_created_files = []
-        self.saved_config = {}
 
         PBSObject.__init__(self, name, attrs, defaults)
 
@@ -3895,7 +3893,7 @@ class PBSService(PBSObject):
         lines = []
         sudo = False
         if endtime is None:
-            endtime = time.time()
+            endtime = int(time.time())
         if starttime is None:
             starttime = self.ctime
         try:
@@ -4222,7 +4220,7 @@ class PBSService(PBSObject):
 
     def _load_configuration(self, infile, objtype=None):
         """
-        Load configuration as was saved in infile
+        Load server configuration as was saved in infile
 
         :param infile: the file in which configuration
                        was saved
@@ -4233,80 +4231,61 @@ class PBSService(PBSObject):
         """
         if os.path.isfile(infile):
             conf = {}
-            sconf = {}
             with open(infile, 'r') as f:
                 try:
-                    sconf = json.load(f)
+                    conf = json.load(f)
                 except ValueError:
                     self.logger.info("Error loading JSON file: %s"
                                      % infile)
                     return False
-            conf = sconf[str(objtype)]
-            if objtype == MGR_OBJ_SERVER:
-                qmgr = os.path.join(self.client_conf['PBS_EXEC'],
-                                    'bin', 'qmgr')
-                for k, v in conf.items():
-                    # Load server configuration
-                    if k.startswith('qmgr_'):
-                        fpath = self.du.create_temp_file()
-                        print_svr = '\n'.join(v)
-                        with open(fpath, 'w') as f:
-                            f.write(print_svr)
-                        file_qmgr = open(fpath)
-                        d = self.du.run_cmd(
-                            self.hostname, [qmgr], stdin=file_qmgr, sudo=True,
-                            logerr=False, level=logging.DEBUG)
-                        err_msg = "Failed to load server configurations"
-                        file_qmgr.close()
-                        if d['rc'] != 0:
-                            self.logger.error("%s" % err_msg)
-                            return False
-                    # Load pbs.conf file
-                    elif k == "pbs_conf":
-                        enc_utf = v.encode('UTF-8')
-                        dec_b64 = base64.b64decode(enc_utf)
-                        cfg_vals = dec_b64.decode('UTF-8')
-                        config = ast.literal_eval(cfg_vals)
-                        self.du.set_pbs_config(self.hostname, confs=config)
-                    # Load hooks
-                    elif k == "hooks":
-                        fpath = self.du.create_temp_file()
-                        print_hooks = '\n'.join(v['qmgr_print_hook'])
-                        with open(fpath, 'w') as f:
-                            f.write(print_hooks)
-                        file_qmgr = open(fpath)
-                        d = self.du.run_cmd(
-                            self.hostname, [qmgr], stdin=file_qmgr, sudo=True,
-                            level=logging.DEBUG)
-                        file_qmgr.close()
-                        if d['rc'] != 0:
-                            self.logger.error("Failed to load site hooks")
-                if 'pbsnodes' in conf:
-                    nodes = conf['pbsnodes']
-                    for node in nodes:
-                        node_name = str(node['id'])
-                        nodes_created = self.create_pbsnode(node_name, node)
-                        if not nodes_created:
-                            self.logger.error("Failed to create node: %s"
-                                              % node)
-                            return False
-                return True
-            elif objtype == MGR_OBJ_SCHED:
-                for k, v in conf.items():
-                    try:
-                        fn = self.du.create_temp_file()
-                        self.du.chmod(path=fn, mode=0o644)
-                        with open(fn, 'w') as fd:
-                            fd.write("\n".join(v))
-                        rv = self.du.run_copy(self.hostname, fn, k, sudo=True)
-                        if rv['rc'] != 0:
-                            self.logger.error("Failed to restore "
-                                              + "configuration: %s" % k)
-                            return False
-                    finally:
-                        if os.path.isfile(fn):
-                            self.du.rm(path=fn)
-                return True
+            qmgr = os.path.join(self.client_conf['PBS_EXEC'],
+                                'bin', 'qmgr')
+            for k, v in conf.items():
+                # Load server configuration
+                if k.startswith('qmgr_'):
+                    fpath = self.du.create_temp_file()
+                    print_svr = '\n'.join(v)
+                    with open(fpath, 'w') as f:
+                        f.write(print_svr)
+                    file_qmgr = open(fpath)
+                    d = self.du.run_cmd(
+                        self.hostname, [qmgr], stdin=file_qmgr, sudo=True,
+                        logerr=False, level=logging.DEBUG)
+                    err_msg = "Failed to load server configurations"
+                    file_qmgr.close()
+                    if d['rc'] != 0:
+                        self.logger.error("%s" % err_msg)
+                        return False
+                # Load pbs.conf file
+                elif k == "pbs_conf":
+                    enc_utf = v.encode('UTF-8')
+                    dec_b64 = base64.b64decode(enc_utf)
+                    cfg_vals = dec_b64.decode('UTF-8')
+                    config = ast.literal_eval(cfg_vals)
+                    self.du.set_pbs_config(self.hostname, confs=config)
+                # Load hooks
+                elif k == "hooks":
+                    fpath = self.du.create_temp_file()
+                    print_hooks = '\n'.join(v['qmgr_print_hook'])
+                    with open(fpath, 'w') as f:
+                        f.write(print_hooks)
+                    file_qmgr = open(fpath)
+                    d = self.du.run_cmd(
+                        self.hostname, [qmgr], stdin=file_qmgr, sudo=True,
+                        level=logging.DEBUG)
+                    file_qmgr.close()
+                    if d['rc'] != 0:
+                        self.logger.error("Failed to load site hooks")
+            if 'pbsnodes' in conf:
+                nodes = conf['pbsnodes']
+                for node in nodes:
+                    node_name = str(node['id'])
+                    nodes_created = self.create_pbsnode(node_name, node)
+                    if not nodes_created:
+                        self.logger.error("Failed to create node: %s"
+                                          % node)
+                        return False
+            return True
         return False
 
     def create_pbsnode(self, node_name, attrs):
@@ -5254,7 +5233,7 @@ class Server(PBSService):
             if "Unknown node" not in e.msg[0]:
                 raise
 
-    def save_configuration(self, outfile=None, mode='w'):
+    def save_configuration(self, outfile, mode='a'):
         """
         Save a server configuration, this includes:
 
@@ -5278,6 +5257,7 @@ class Server(PBSService):
         :returns: True on success, False on error
         """
         conf = {}
+        sconf = {MGR_OBJ_SERVER: conf}
         # save pbs.conf file
         cfg_path = self.du.get_pbs_conf_file()
         with open(cfg_path, 'r') as p:
@@ -5315,13 +5295,8 @@ class Server(PBSService):
             return False
         else:
             conf['qmgr_print_sched'] = ret['out']
-
-        # sudo=True is added while running "pbsnodes -av", to make
-        # sure that all the node attributes are preserved in
-        # save_configuration. If this command is run without sudo,
-        # some of the node attributes like port, version is not listed.
         ret = self.du.run_cmd(self.hostname, [pbsnodes, '-av'],
-                              logerr=False, level=logging.DEBUG, sudo=True)
+                              logerr=False, level=logging.DEBUG)
         err_msg = "Server has no node list"
         # pbsnodes -av returns a non zero exit code when there are
         # no nodes in cluster
@@ -5331,15 +5306,12 @@ class Server(PBSService):
         else:
             nodes_val = self.utils.convert_to_dictlist(ret['out'])
             conf['pbsnodes'] = nodes_val
-        self.saved_config[MGR_OBJ_SERVER] = conf
-        if outfile is not None:
-            try:
-                with open(outfile, mode) as f:
-                    json.dump(self.saved_config, f)
-                    self.saved_config[MGR_OBJ_SERVER].clear()
-            except:
-                self.logger.error('Error processing file ' + outfile)
-                return False
+        try:
+            with open(outfile, mode) as f:
+                json.dump(conf, f)
+        except:
+            self.logger.error('Error processing file ' + outfile)
+            return False
 
         return True
 
@@ -5361,7 +5333,7 @@ class Server(PBSService):
 
     def load_configuration(self, infile):
         """
-        load server configuration from saved file ``infile``
+        load configuration from saved file ``infile``
         """
         rv = self._load_configuration(infile, MGR_OBJ_SERVER)
         return rv
@@ -6015,8 +5987,8 @@ class Server(PBSService):
             submit_dir = pwd.getpwnam(obj.username)[5]
 
         cwd = os.getcwd()
-        if submit_dir:
-            os.chdir(submit_dir)
+        #if submit_dir:
+        #    os.chdir(submit_dir)
         c = None
         # 1- Submission using the command line tools
         if self.get_op_mode() == PTL_CLI:
@@ -6048,9 +6020,6 @@ class Server(PBSService):
                         if _rrule[0] not in ("'", '"'):
                             _rrule = "'" + _rrule + "'"
                         obj.custom_attrs[ATTR_resv_rrule] = _rrule
-                if ATTR_job in obj.attributes:
-                    runcmd += ['--job', obj.attributes[ATTR_job]]
-                    exclude_attrs += [ATTR_job]
 
             if not self._is_local:
                 if ATTR_queue not in obj.attributes:
@@ -6195,7 +6164,7 @@ class Server(PBSService):
                        objid)
             if obj.script_body:
                 self.logger.log(logging.INFOCLI, 'job script ' + script +
-                                '\n---\n' + obj.script_body + '\n---')
+                                '\n---\n' + str(obj.script_body) + '\n---')
             if objid is not None:
                 self.jobs[objid] = obj
         elif isinstance(obj, Reservation):
@@ -8542,7 +8511,7 @@ class Server(PBSService):
                         runas=ROOT_USER, wait=False)
         except PbsDeljobError:
             pass
-        st = time.time()
+        st = int(time.time())
         if len(job_ids) > 100:
             for host, pids in host_pid_map.items():
                 chunks = [pids[i:i + 5000] for i in range(0, len(pids), 5000)]
@@ -9633,22 +9602,6 @@ class Server(PBSService):
             return False
 
         self.manager(MGR_CMD_SET, HOOK, attrs, id=name)
-        return True
-
-    def delete_hook(self, name):
-        """
-        Helper function to delete a hook by name.
-
-        :param name: The name of the hook to delete
-        :type name: str
-        :returns: False if hook does not exist
-        :raises: PbsManagerError, otherwise return True.
-        """
-        hooks = self.status(HOOK, level=logging.DEBUG)
-        for hook in hooks:
-            if hook['id'] == name:
-                self.logger.info("Removing hook:%s" % name)
-                self.manager(MGR_CMD_DELETE, HOOK, id=name)
         return True
 
     def import_hook(self, name, body, level=logging.INFO):
@@ -11323,7 +11276,7 @@ class Scheduler(PBSService):
         if len(config) == 0:
             return True
 
-        reconfig_time = time.time()
+        reconfig_time = int(time.time())
         try:
             fn = self.du.create_temp_file()
             with open(fn, "w", encoding="utf-8") as fd:
@@ -11572,20 +11525,20 @@ class Scheduler(PBSService):
 
         self.setup_sched_priv(sched_priv=sched_priv_dir)
 
-    def save_configuration(self, outfile=None, mode='w'):
+    def save_configuration(self, outfile, mode='a'):
         """
         Save scheduler configuration
 
-        :param outfile: Optional Path to a file to which configuration
-                        is saved, when not provided, data is saved in
-                        class variable saved_config
+        :param outfile: Path to a file to which configuration
+                        is saved
         :type outfile: str
         :param mode: mode to use to access outfile. Defaults to
-                     append, 'w'.
+                     append, 'a'.
         :type mode: str
         :returns: True on success and False otherwise
         """
         conf = {}
+        sconf = {MGR_OBJ_SCHED: conf}
         if 'sched_priv' in self.attributes:
             sched_priv = self.attributes['sched_priv']
         else:
@@ -11600,25 +11553,20 @@ class Scheduler(PBSService):
         hd = os.path.join(sched_priv, 'holidays')
         self._save_config_file(conf, hd)
 
-        self.server.saved_config[MGR_OBJ_SCHED] = conf
-        if outfile is not None:
-            try:
-                with open(outfile, mode) as f:
-                    json.dump(self.server.saved_config, f)
-                    self.server.saved_config[MGR_OBJ_SCHED].clear()
-            except:
-                self.logger.error('error saving configuration ' + outfile)
-                return False
+        try:
+            with open(outfile, mode) as f:
+                cPickle.dump(sconf, f)
+        except:
+            self.logger.error('error saving configuration ' + outfile)
+            return False
 
         return True
 
     def load_configuration(self, infile):
         """
-        load scheduler configuration from saved file infile
+        load configuration from saved file infile
         """
-        rv = self._load_configuration(infile, MGR_OBJ_SCHED)
-        self.signal('-HUP')
-        return rv
+        self._load_configuration(infile, MGR_OBJ_SCHED)
 
     def get_resources(self, exclude=[]):
         """
@@ -12711,7 +12659,7 @@ class Scheduler(PBSService):
                 self.hostname, self.resource_group_file)
         if isinstance(name, PbsUser):
             name = str(name)
-        reconfig_time = time.time()
+        reconfig_time = int(time.time())
         rc = self.resource_group.create_node(name, fairshare_id,
                                              parent_name=parent,
                                              nshares=nshares)
@@ -14233,10 +14181,23 @@ class Job(ResourceResv):
 
         if body is None:
             return None
-
+        jscript = []
         if isinstance(body, list):
-            body = '\n'.join(body)
-
+            self.logger.info('*******************************************************')
+            self.logger.info(body)
+            for line in body:
+                if isinstance(line, list):
+                    jscript.extend(line)
+                    #body.extend(job_script)
+                    #body.remove(line)
+                if isinstance(line, str):
+                    jscript.append(line)
+                    #script2 = '\n'.join(line)
+            #script1 = '\n'.join(script2)
+            body = '\n'.join(jscript)
+            #body = script1
+            self.logger.info(body)
+                
         if self.platform == 'cray' or self.platform == 'craysim':
             body = body.split("\n")
             for i, line in enumerate(body):
@@ -14273,6 +14234,7 @@ class Job(ResourceResv):
             self.du = DshUtils()
         # First create the temporary file as current user and only change
         # its mode once the current user has written to it
+        self.logger.info('hostname inside create script ' + hostname )
         fn = self.du.create_temp_file(hostname, prefix='PtlPbsJobScript',
                                       asuser=asuser, body=body)
         self.du.chmod(hostname, fn, mode=0o755)
@@ -14362,13 +14324,11 @@ class Reservation(ResourceResv):
 
         # These are not in dflt_attributes because of the conversion to CLI
         # options is done strictly
-        if ATTR_resv_start not in self.attributes and \
-           ATTR_job not in self.attributes:
+        if ATTR_resv_start not in self.attributes:
             self.attributes[ATTR_resv_start] = str(int(time.time()) +
                                                    36 * 3600)
 
-        if ATTR_resv_end not in self.attributes and \
-           ATTR_job not in self.attributes:
+        if ATTR_resv_end not in self.attributes:
             if ATTR_resv_duration not in self.attributes:
                 self.attributes[ATTR_resv_end] = str(int(time.time()) +
                                                      72 * 3600)

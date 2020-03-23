@@ -172,12 +172,10 @@ def skipOnCpuSet(function):
     """
     Decorator to skip a test on a CpuSet system
     """
+
     def wrapper(self, *args, **kwargs):
-        for mom in self.moms.values():
-            if mom.is_cpuset_mom():
-                msg = 'capability not supported on Cpuset mom:' + mom.shortname
-                self.skipTest(reason=msg)
-                break
+        if self.mom.is_cpuset_mom():
+            self.skipTest(reason='capability not supported on Cpuset')
         else:
             function(self, *args, **kwargs)
     wrapper.__doc__ = function.__doc__
@@ -451,22 +449,17 @@ class PBSTestSuite(unittest.TestCase):
         cls.init_param()
         cls.check_users_exist()
         cls.init_servers()
-        cls.init_schedulers()
         if cls.use_cur_setup:
             _, path = tempfile.mkstemp(prefix="saved_custom_setup",
                                        suffix=".json")
-            ret = cls.server.save_configuration()
-            if not ret:
-                cls.logger.error("Failed to save server's custom setup")
-                raise Exception("Failed to save server's custom setup")
-            ret = cls.scheduler.save_configuration(path, 'w')
+            ret = cls.server.save_configuration(path, 'w')
             if ret:
                 cls.saved_file = path
             else:
-                cls.logger.error("Failed to save scheduler's custom setup")
-                raise Exception("Failed to save scheduler's custom setup")
-            cls.add_mgrs_opers()
+                cls.logger.error("Failed to save custom setup")
+                raise Exception("Failed to save custom setup")
         cls.init_comms()
+        cls.init_schedulers()
         cls.init_moms()
         cls.log_end_setup(True)
 
@@ -478,17 +471,13 @@ class PBSTestSuite(unittest.TestCase):
         if not PBSTestSuite.config_saved and self.use_cur_setup:
             _, path = tempfile.mkstemp(prefix="saved_test_setup",
                                        suffix=".json")
-            ret = self.server.save_configuration()
-            if not ret:
-                self.logger.error("Failed to save server's test setup")
-                raise Exception("Failed to save server's test setup")
-            ret = self.scheduler.save_configuration(path, 'w')
+            ret = self.server.save_configuration(path, 'w')
             if ret:
                 self.saved_file = path
+                PBSTestSuite.config_saved = True
             else:
-                self.logger.error("Failed to save scheduler's test setup")
-                raise Exception("Failed to save scheduler's test setup")
-            PBSTestSuite.config_saved = True
+                self.logger.error("Failed to save test setup")
+                raise Exception("Failed to save test setup")
         # Adding only server and pbs.conf methods in use current
         # setup block, rest of them to be added to this block
         # once save & load configurations are implemented for
@@ -498,9 +487,9 @@ class PBSTestSuite(unittest.TestCase):
         else:
             self.revert_servers()
             self.revert_pbsconf()
-            self.revert_schedulers()
         self.revert_moms()
         self.revert_comms()
+        self.revert_schedulers()
         self.log_end_setup()
         self.measurements = []
 
@@ -1018,11 +1007,6 @@ class PBSTestSuite(unittest.TestCase):
             # default list
             if len(pbs_conf_val) != len(new_pbsconf):
                 restart_comm = True
-            # Check if existing pbs.conf has correct ownership
-            dest = self.du.get_pbs_conf_file(comm.hostname)
-            (cf_uid, cf_gid) = (os.stat(dest).st_uid, os.stat(dest).st_gid)
-            if cf_uid != 0 or cf_gid > 10:
-                restart_comm = True
 
             if restart_comm:
                 self.du.set_pbs_config(comm.hostname, confs=new_pbsconf)
@@ -1099,11 +1083,6 @@ class PBSTestSuite(unittest.TestCase):
             # Check if existing pbs.conf has more/less entries than the
             # default list
             if len(pbs_conf_val) != len(new_pbsconf):
-                restart_mom = True
-            # Check if existing pbs.conf has correct ownership
-            dest = self.du.get_pbs_conf_file(mom.hostname)
-            (cf_uid, cf_gid) = (os.stat(dest).st_uid, os.stat(dest).st_gid)
-            if cf_uid != 0 or cf_gid > 10:
                 restart_mom = True
 
             if restart_mom:
@@ -1216,11 +1195,6 @@ class PBSTestSuite(unittest.TestCase):
             # default list
             if len(pbs_conf_val) != len(new_pbsconf):
                 restart_pbs = True
-            # Check if existing pbs.conf has correct ownership
-            dest = self.du.get_pbs_conf_file(server.hostname)
-            (cf_uid, cf_gid) = (os.stat(dest).st_uid, os.stat(dest).st_gid)
-            if cf_uid != 0 or cf_gid > 10:
-                restart_pbs = True
 
             if restart_pbs or dmns_to_restart > 0:
                 # Write out the new pbs.conf file
@@ -1275,7 +1249,7 @@ class PBSTestSuite(unittest.TestCase):
 
     def revert_pbsconf(self):
         """
-        Revert contents and ownership of the pbs.conf file
+        Revert contents of the pbs.conf file
         Also start/stop the appropriate daemons
         """
         primary_server = self.server
@@ -1334,41 +1308,6 @@ class PBSTestSuite(unittest.TestCase):
         for mom in self.moms.values():
             self.revert_mom(mom, force)
 
-    @classmethod
-    def add_mgrs_opers(cls):
-        """
-        Adding manager and operator users
-        """
-        if not cls.use_cur_setup:
-            try:
-                # Unset managers list
-                cls.server.manager(MGR_CMD_UNSET, SERVER, 'managers',
-                                   sudo=True)
-                # Unset operators list
-                cls.server.manager(MGR_CMD_UNSET, SERVER, 'operators',
-                                   sudo=True)
-            except PbsManagerError as e:
-                self.logger.error(e.msg)
-        attr = {}
-        current_user = pwd.getpwuid(os.getuid())[0] + '@*'
-        mgrs_opers = {"managers": [current_user, str(MGR_USER) + '@*'],
-                      "operators": [str(OPER_USER) + '@*']}
-        server_stat = cls.server.status(SERVER, ["managers", "operators"])
-        if len(server_stat) > 0:
-            server_stat = server_stat[0]
-        for role, users in mgrs_opers.items():
-            if role not in server_stat:
-                attr[role] = (INCR, ','.join(users))
-            else:
-                add_users = []
-                for user in users:
-                    if user not in server_stat[role]:
-                        add_users.append(user)
-                if len(add_users) > 0:
-                    attr[role] = (INCR, ",".join(add_users))
-        if len(attr) > 0:
-            cls.server.manager(MGR_CMD_SET, SERVER, attr, sudo=True)
-
     def revert_server(self, server, force=False):
         """
         Revert the values set for server
@@ -1380,7 +1319,20 @@ class PBSTestSuite(unittest.TestCase):
             msg = 'Failed to restart server ' + server.hostname
             self.assertTrue(server.isUp(), msg)
         server_stat = server.status(SERVER)[0]
-        self.add_mgrs_opers()
+        current_user = pwd.getpwuid(os.getuid())[0]
+        try:
+            # Unset managers list
+            server.manager(MGR_CMD_UNSET, SERVER, 'managers', sudo=True)
+            # Unset operators list
+            server.manager(MGR_CMD_UNSET, SERVER, 'operators', sudo=True)
+        except PbsManagerError as e:
+            self.logger.error(e.msg)
+        a = {ATTR_managers: (INCR, current_user + '@*,' +
+                             str(MGR_USER) + '@*')}
+        server.manager(MGR_CMD_SET, SERVER, a, sudo=True)
+
+        a1 = {ATTR_operators: (INCR, str(OPER_USER) + '@*')}
+        server.manager(MGR_CMD_SET, SERVER, a1, sudo=True)
         if ((self.revert_to_defaults and self.server_revert_to_defaults) or
                 force):
             server.revert_to_defaults(reverthooks=self.revert_hooks,
@@ -1621,10 +1573,7 @@ class PBSTestSuite(unittest.TestCase):
             self.delete_current_state(self.server, self.moms)
             ret = self.server.load_configuration(self.saved_file)
             if not ret:
-                raise Exception("Failed to load server's test setup")
-            ret = self.scheduler.load_configuration(self.saved_file)
-            if not ret:
-                raise Exception("Failed to load scheduler's test setup")
+                raise Exception("Failed to load test setup")
         self.log_end_teardown()
 
     @classmethod
@@ -1635,9 +1584,6 @@ class PBSTestSuite(unittest.TestCase):
             PBSTestSuite.config_saved = False
             ret = cls.server.load_configuration(cls.saved_file)
             if not ret:
-                raise Exception("Failed to load server's custom setup")
-            ret = cls.scheduler.load_configuration(cls.saved_file)
-            if not ret:
-                raise Exception("Failed to load scheduler's custom setup")
+                raise Exception("Failed to load custom setup")
         if cls.use_cur_setup:
             cls.du.rm(path=cls.saved_file)
