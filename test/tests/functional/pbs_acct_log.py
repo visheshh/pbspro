@@ -103,13 +103,18 @@ class TestAcctLog(TestFunctional):
         # Make sure the server log hasn't been truncated
         log_match = 'resources_used.foo_str=' + hstr
         self.server.log_match("%s;.*%s.*" % (jid, log_match), regexp=True)
-
+        self.logger.info('log is' + str(log_match))
         mailpass = 0
         for x in range(1, 5):
             fo = open(mailfile, 'r')
+            mail = fo.readlines()
+            self.logger.info('mail is' + str(mail))
             maillog = fo.readlines()[-10:]
+            self.logger.info('maillog is' + str(maillog))
             fo.close()
             if (log_match in str(maillog)):
+                self.logger.info('maillog if is' + str(maillog))
+                self.logger.info('logmatch is' + str(log_match))
                 self.logger.info("Message found in " + mailfile)
                 mailpass = 1
                 break
