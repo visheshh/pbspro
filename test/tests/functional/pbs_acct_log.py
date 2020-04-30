@@ -105,6 +105,8 @@ class TestAcctLog(TestFunctional):
         self.server.log_match("%s;.*%s.*" % (jid, log_match), regexp=True)
         self.logger.info('log is' + str(log_match))
         mailpass = 0
+        ret = self.du.cat(filename=mailfile)
+        self.logger.info(ret['out'])
         for x in range(1, 5):
             fo = open(mailfile, 'r')
             mail = fo.readlines()
