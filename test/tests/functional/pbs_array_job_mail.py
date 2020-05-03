@@ -77,6 +77,7 @@ class Test_array_job_email(TestFunctional):
         time.sleep(10)
 
         ret = self.du.cat(filename=mailfile, sudo=True)
+        self.logger.info("mail is " + str(ret['out']))
         maillog = [x.strip() for x in ret['out'][-600:]]
 
         for (jobid, msg) in emails:
