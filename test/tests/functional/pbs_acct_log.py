@@ -86,7 +86,7 @@ class TestAcctLog(TestFunctional):
         self.server.create_import_hook("ep", a, hook_body)
 
         J = Job()
-        J.set_attributes({ATTR_m: 'jabe'})
+        J.set_attributes({ATTR_m: 'abe'})
         J.set_sleep_time(1)
         jid = self.server.submit(J)
 
