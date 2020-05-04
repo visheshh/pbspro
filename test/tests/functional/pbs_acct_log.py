@@ -56,7 +56,7 @@ class TestAcctLog(TestFunctional):
         
         # Make sure emails are not truncated
         try:
-            mailfile = os.path.join("/var/mail", str(TEST_USER))
+            mailfile = os.path.join("/var/mail", str(PBSROOT_USER))
         except KeyError:
             self.skip_test(
                 "mail is not setup. " +
@@ -85,7 +85,7 @@ class TestAcctLog(TestFunctional):
         a = {'event': 'execjob_epilogue', 'enabled': 'True'}
         self.server.create_import_hook("ep", a, hook_body)
 
-        J = Job(TEST_USER)
+        J = Job(PBSROOT_USER)
         J.set_attributes({ATTR_m: 'abe'})
         J.set_sleep_time(1)
         jid = self.server.submit(J)
