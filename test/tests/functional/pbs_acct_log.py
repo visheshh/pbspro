@@ -108,9 +108,7 @@ class TestAcctLog(TestFunctional):
         self.logger.info('cat out is' + str(ret))
         for x in range(1, 5):
             fo = open(mailfile, 'r')
-            mail = fo.readlines()
-            self.logger.info('mail is' + str(mail))
-            maillog = fo.readlines()
+            maillog = fo.readlines()[-10:]
             self.logger.info('maillog is' + str(maillog))
             fo.close()
             if (log_match in str(maillog)):
