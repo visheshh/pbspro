@@ -53,10 +53,10 @@ class TestAcctLog(TestFunctional):
         Test to see if a very long string resource is neither truncated
         in the job's resources_used attr or the accounting log at job end
         """
-
+        
         # Make sure emails are not truncated
         try:
-            mailfile = os.environ['MAIL']
+            mailfile = os.path.join("/var/mail", str(TEST_USER))
         except KeyError:
             self.skip_test(
                 "mail is not setup. " +
@@ -85,7 +85,7 @@ class TestAcctLog(TestFunctional):
         a = {'event': 'execjob_epilogue', 'enabled': 'True'}
         self.server.create_import_hook("ep", a, hook_body)
 
-        J = Job()
+        J = Job(TEST_USER)
         J.set_attributes({ATTR_m: 'abe'})
         J.set_sleep_time(1)
         jid = self.server.submit(J)
@@ -106,7 +106,7 @@ class TestAcctLog(TestFunctional):
         self.logger.info('log is' + str(log_match))
         mailpass = 0
         ret = self.du.cat(filename=mailfile)
-        self.logger.info(ret['out'])
+        self.logger.info('cat out is' + str(ret))
         for x in range(1, 5):
             fo = open(mailfile, 'r')
             mail = fo.readlines()
