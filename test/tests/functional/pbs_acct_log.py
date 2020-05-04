@@ -86,7 +86,7 @@ class TestAcctLog(TestFunctional):
         self.server.create_import_hook("ep", a, hook_body)
 
         J = Job(PBSROOT_USER)
-        J.set_attributes({ATTR_m: 'abe'})
+        J.set_attributes({ATTR_m: 'e'})
         J.set_sleep_time(1)
         jid = self.server.submit(J)
 
@@ -99,7 +99,6 @@ class TestAcctLog(TestFunctional):
         log_match = 'resources_used.foo_str=' + hstr
         self.server.accounting_match(
             "E;%s;.*%s.*" % (jid, log_match), regexp=True)
-        time.sleep(10)
         # Make sure the server log hasn't been truncated
         log_match = 'resources_used.foo_str=' + hstr
         self.server.log_match("%s;.*%s.*" % (jid, log_match), regexp=True)
@@ -111,7 +110,7 @@ class TestAcctLog(TestFunctional):
             fo = open(mailfile, 'r')
             mail = fo.readlines()
             self.logger.info('mail is' + str(mail))
-            maillog = fo.readlines()[-10:]
+            maillog = fo.readlines()
             self.logger.info('maillog is' + str(maillog))
             fo.close()
             if (log_match in str(maillog)):
