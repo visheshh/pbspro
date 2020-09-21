@@ -381,7 +381,7 @@ class TestMultipleSchedulers(TestFunctional):
                                    'Resource_List.select': '1:ncpus=2'})
         jid = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
-        self.check_vnodes(j, vn[0], jid)
+        self.check_vnodes(j, [vn[0]], jid)
         self.scheds['sc1'].log_match(
             jid + ';Job run', max_attempts=10,
             starttime=self.server.ctime)
@@ -389,7 +389,7 @@ class TestMultipleSchedulers(TestFunctional):
                                    'Resource_List.select': '1:ncpus=2'})
         jid = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
-        self.check_vnodes(j, vn[1], jid)
+        self.check_vnodes(j, [vn[1]], jid)
         self.scheds['sc2'].log_match(
             jid + ';Job run', max_attempts=10,
             starttime=self.server.ctime)
@@ -397,7 +397,7 @@ class TestMultipleSchedulers(TestFunctional):
                                    'Resource_List.select': '1:ncpus=2'})
         jid = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
-        self.check_vnodes(j, vn[2], jid)
+        self.check_vnodes(j, [vn[2]], jid)
         self.scheds['sc3'].log_match(
             jid + ';Job run', max_attempts=10,
             starttime=self.server.ctime)
@@ -415,7 +415,7 @@ class TestMultipleSchedulers(TestFunctional):
                                    'Resource_List.select': '1:ncpus=1'})
         jid = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
-        self.check_vnodes(j, vn0, jid)
+        self.check_vnodes(j, [vn0], jid)
         self.scheds['sc1'].log_match(
             jid + ';Job run', max_attempts=10,
             starttime=self.server.ctime)
@@ -425,7 +425,7 @@ class TestMultipleSchedulers(TestFunctional):
                                    'Resource_List.select': '1:ncpus=1'})
         jid = self.server.submit(j)
         self.server.expect(JOB, {'job_state': 'R'}, id=jid)
-        self.check_vnodes(j, vn0, jid)
+        self.check_vnodes(j, [vn0], jid)
         self.scheds['sc1'].log_match(
             jid + ';Job run', max_attempts=10,
             starttime=self.server.ctime)
