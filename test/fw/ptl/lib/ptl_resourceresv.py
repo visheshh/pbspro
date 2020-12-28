@@ -487,6 +487,7 @@ x = 0
 def receive_alarm(signum, stack):
     sys.exit()
 
+signal.signal(signal.SIGTERM, receive_alarm)
 signal.signal(signal.SIGALRM, receive_alarm)
 
 if (len(sys.argv) > 1):
