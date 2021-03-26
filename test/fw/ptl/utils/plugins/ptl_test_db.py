@@ -1622,7 +1622,7 @@ class JSONDb(DBType):
         prev_data = copy.deepcopy(self.jdata)
         self.jdata = self.res_data.get_json(data=data, prev_data=prev_data)
         with open(self.dbpath, 'w') as fd:
-            json.dump(self.jdata, fd, indent=2)
+            json.dump(self.jdata, fd, sort_keys=True, indent=2)
             fd.write("\n")
 
     def write(self, data, logfile=None):
@@ -1638,7 +1638,7 @@ class JSONDb(DBType):
             self.jdata['result']["end"] = str(result.stop)
             self.jdata['result']['duration'] = dur
             with open(self.dbpath, 'w') as fd:
-                json.dump(self.jdata, fd, indent=2)
+                json.dump(self.jdata, fd, sort_keys=True, indent=2)
                 fd.write("\n")
 
 
