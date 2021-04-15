@@ -426,7 +426,12 @@ class Server(Wrappers):
             self.delete_sched_config()
 
         if delnodes:
-            self.delete_nodes()
+            for m in self.moms:
+                if self.moms[m].is_cpuset_mom():
+                    self.logger.info("Do not delete cpuset mom")
+                else:
+                    self.delete_nodes(m)
+
         if reverthooks:
             if self.platform == 'shasta':
                 dohup = False
@@ -480,6 +485,20 @@ class Server(Wrappers):
             rescs = []
         if len(rescs) > 0:
             self.manager(MGR_CMD_DELETE, RSC, id=rescs)
+        cmd = os.path.join(self.client_conf['PBS_EXEC'], 'bin',
+                           'pbsnodes') + ' -av' + ' -Fjson'
+        cmd_out = self.du.run_cmd(self.hostname, cmd, sudo=True)
+        if cmd_out['rc'] != 0:
+            return False
+        pbsnodes_json = json.loads('\n'.join(cmd_out['out']))
+        for m in pbsnodes_json['nodes']:
+            for r in rescs:
+                if not r == 'ngpus' and not r == 'hpmem':
+                    try:
+                        a = 'resources_available.' + r
+                        self.manager(MGR_CMD_UNSET, NODE, a,  id=m)
+                    except PbsManagerError:
+                        pass
 
     def unset_svr_attrib(self, server_stat=None):
         """
@@ -575,12 +594,12 @@ class Server(Wrappers):
                 ret = 15062
         return ret
 
-    def delete_nodes(self):
+    def delete_nodes(self, node):
         """
         Remove all the nodes from PBS
         """
         try:
-            self.manager(MGR_CMD_DELETE, VNODE, id="@default")
+            self.manager(MGR_CMD_DELETE, VNODE, id=node)
         except PbsManagerError as e:
             if "Unknown node" not in e.msg[0]:
                 raise

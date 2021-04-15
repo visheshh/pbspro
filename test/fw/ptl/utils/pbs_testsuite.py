@@ -1535,7 +1535,6 @@ class PBSTestSuite(unittest.TestCase):
         if enabled_cpuset:
             time.sleep(4)
         a = {'state': 'free'}
-        self.server.manager(MGR_CMD_CREATE, NODE, None, mom.shortname)
         if enabled_cpuset:
             # In order to avoid intermingling CF/HK/PY file copies from the
             # create node and those caused by the following call, wait
@@ -1556,6 +1555,7 @@ class PBSTestSuite(unittest.TestCase):
             mom.signal('-HUP')
             self.server.expect(NODE, a, id=mom.shortname + '[0]', interval=1)
         else:
+            self.server.manager(MGR_CMD_CREATE, NODE, None, mom.shortname)
             self.server.expect(NODE, a, id=mom.shortname, interval=1)
             self.server.update_special_attr(NODE, id=mom.shortname)
 
