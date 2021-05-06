@@ -2407,7 +2407,7 @@ main(int argc, char **argv, char **envp) /* qstat */
 	/*test for real deal or just version and exit*/
 
 	PRINT_VERSION_AND_EXIT(argc, argv);
-	delay_query();
+	//delay_query();
 	if (initsocketlib())
 		return 1;
 
